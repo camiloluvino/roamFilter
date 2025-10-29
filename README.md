@@ -69,6 +69,29 @@ This extension will be submitted to Roam Depot for easier installation.
 - Roam Research (web or desktop)
 - No additional dependencies
 
+## Development
+
+### Testing
+
+The extension includes unit tests for core functions. To run tests:
+
+1. Open `tests.html` in your browser
+2. Tests will run automatically and display results
+
+### Uninstalling
+
+To remove the extension and clean up event listeners, run in browser console:
+```javascript
+window.roamFilterCopyCleanup();
+```
+
+## Technical Features
+
+- **Robust error handling**: All functions include try-catch blocks and input validation
+- **API safety checks**: Validates Roam API and Clipboard API availability before use
+- **Memory cleanup**: Provides cleanup function to remove event listeners
+- **Direct child detection**: Improved algorithm for detecting parent-child relationships
+
 ## License
 
 MIT

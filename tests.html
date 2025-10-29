@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Roam Filter Copy - Unit Tests</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    h1 {
+      color: #333;
+    }
+    .test-section {
+      background: white;
+      padding: 20px;
+      margin: 20px 0;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .test-case {
+      margin: 10px 0;
+      padding: 10px;
+      border-left: 4px solid #ccc;
+    }
+    .test-case.passed {
+      border-left-color: #28a745;
+      background: #f0fff4;
+    }
+    .test-case.failed {
+      border-left-color: #dc3545;
+      background: #fff5f5;
+    }
+    .test-name {
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+    .test-result {
+      font-size: 14px;
+      color: #666;
+    }
+    .summary {
+      background: #e9ecef;
+      padding: 15px;
+      border-radius: 8px;
+      margin-top: 20px;
+      font-weight: bold;
+    }
+    .summary.all-passed {
+      background: #d4edda;
+      color: #155724;
+    }
+    .summary.some-failed {
+      background: #f8d7da;
+      color: #721c24;
+    }
+  </style>
+</head>
+<body>
+  <h1>Roam Filter Copy - Unit Tests</h1>
+  <div id="test-results"></div>
+  <div id="summary"></div>
+
+  <script>
+    // Simple test framework
+    class TestRunner {
+      constructor() {
+        this.tests = [];
+        this.results = [];
+      }
+
+      test(name, fn) {
+        this.tests.push({ name, fn });
+      }
+
+      async run() {
+        for (const test of this.tests) {
+          try {
+            await test.fn();
+            this.results.push({ name: test.name, passed: true });
+          } catch (error) {
+            this.results.push({ name: test.name, passed: false, error: error.message });
+          }
+        }
+        this.displayResults();
+      }
+
+      displayResults() {
+        const container = document.getElementById('test-results');
+        const summaryDiv = document.getElementById('summary');
+
+        let html = '';
+        this.results.forEach(result => {
+          const status = result.passed ? 'passed' : 'failed';
+          const icon = result.passed ? '✓' : '✗';
+          const errorMsg = result.error ? `<div class="test-result">Error: ${result.error}</div>` : '';
+
+          html += `
+            <div class="test-case ${status}">
+              <div class="test-name">${icon} ${result.name}</div>
+              ${errorMsg}
+            </div>
+          `;
+        });
+
+        container.innerHTML = `<div class="test-section">${html}</div>`;
+
+        const passed = this.results.filter(r => r.passed).length;
+        const total = this.results.length;
+        const allPassed = passed === total;
+
+        summaryDiv.innerHTML = `
+          <div class="summary ${allPassed ? 'all-passed' : 'some-failed'}">
+            Tests: ${passed}/${total} passed
+          </div>
+        `;
+      }
+    }
+
+    // Helper function for assertions
+    function assert(condition, message) {
+      if (!condition) {
+        throw new Error(message || 'Assertion failed');
+      }
+    }
+
+    function assertEqual(actual, expected, message) {
+      if (actual !== expected) {
+        throw new Error(message || `Expected ${expected}, but got ${actual}`);
+      }
+    }
+
+    // Mock Roam API for testing
+    window.roamAlphaAPI = {
+      pull: (query, params) => {
+        // Mock implementation for testing
+        const uid = params[1];
+
+        // Mock data for testing
+        const mockBlocks = {
+          'test-uid-1': {
+            ':block/string': 'Test Block 1',
+            ':block/children': [
+              { ':block/uid': 'test-uid-1-1', ':block/order': 0 }
+            ]
+          },
+          'test-uid-1-1': {
+            ':block/string': 'Child Block 1.1',
+            ':block/children': []
+          },
+          'test-uid-2': {
+            ':block/string': 'Test Block 2',
+            ':block/children': []
+          }
+        };
+
+        return mockBlocks[uid] || null;
+      }
+    };
+
+    // Load the extension code (we need to inline it for testing)
+  </script>
+
+  <!-- Include the extension code here -->
+  <script src="extension.js"></script>
+
+  <script>
+    // Run tests
+    const runner = new TestRunner();
+
+    // Test 1: isRoamAPIAvailable
+    runner.test('isRoamAPIAvailable - should return true when API exists', () => {
+      const result = isRoamAPIAvailable();
+      assert(result === true, 'API should be available');
+    });
+
+    // Test 2: isRoamAPIAvailable with missing API
+    runner.test('isRoamAPIAvailable - should return false when API is missing', () => {
+      const originalAPI = window.roamAlphaAPI;
+      window.roamAlphaAPI = null;
+      const result = isRoamAPIAvailable();
+      window.roamAlphaAPI = originalAPI;
+      assert(result === false, 'API should not be available');
+    });
+
+    // Test 3: getBlockUidFromElement with null
+    runner.test('getBlockUidFromElement - should handle null container', () => {
+      const result = getBlockUidFromElement(null);
+      assert(result === null, 'Should return null for null container');
+    });
+
+    // Test 4: getBlockUidFromElement with valid element
+    runner.test('getBlockUidFromElement - should extract UID from element', () => {
+      const div = document.createElement('div');
+      const input = document.createElement('textarea');
+      input.id = 'block-input-test-123-abc';
+      div.appendChild(input);
+
+      const result = getBlockUidFromElement(div);
+      assertEqual(result, 'abc', 'Should extract UID correctly');
+    });
+
+    // Test 5: isDescendantOf with null parameters
+    runner.test('isDescendantOf - should handle null parameters', () => {
+      const result = isDescendantOf(null, null);
+      assert(result === false, 'Should return false for null parameters');
+    });
+
+    // Test 6: isDescendantOf with valid elements
+    runner.test('isDescendantOf - should detect descendant relationship', () => {
+      const parent = document.createElement('div');
+      const child = document.createElement('div');
+      const grandchild = document.createElement('div');
+
+      parent.appendChild(child);
+      child.appendChild(grandchild);
+
+      const result = isDescendantOf(grandchild, parent);
+      assert(result === true, 'Grandchild should be descendant of parent');
+    });
+
+    // Test 7: isDescendantOf with non-descendant
+    runner.test('isDescendantOf - should return false for non-descendants', () => {
+      const div1 = document.createElement('div');
+      const div2 = document.createElement('div');
+
+      const result = isDescendantOf(div1, div2);
+      assert(result === false, 'Unrelated elements should not be descendants');
+    });
+
+    // Test 8: isDirectChild with null parameters
+    runner.test('isDirectChild - should handle null parameters', () => {
+      const result = isDirectChild(null, null);
+      assert(result === false, 'Should return false for null parameters');
+    });
+
+    // Test 9: isDirectChild with direct child
+    runner.test('isDirectChild - should detect direct child relationship', () => {
+      const parent = document.createElement('div');
+      parent.classList.add('roam-block-container');
+
+      const wrapper = document.createElement('div');
+      const child = document.createElement('div');
+      child.classList.add('roam-block-container');
+
+      parent.appendChild(wrapper);
+      wrapper.appendChild(child);
+
+      const result = isDirectChild(child, parent);
+      assert(result === true, 'Should detect direct child');
+    });
+
+    // Test 10: isDirectChild with grandchild
+    runner.test('isDirectChild - should reject grandchild', () => {
+      const parent = document.createElement('div');
+      parent.classList.add('roam-block-container');
+
+      const child = document.createElement('div');
+      child.classList.add('roam-block-container');
+
+      const grandchildWrapper = document.createElement('div');
+      const grandchild = document.createElement('div');
+      grandchild.classList.add('roam-block-container');
+
+      parent.appendChild(child);
+      child.appendChild(grandchildWrapper);
+      grandchildWrapper.appendChild(grandchild);
+
+      const result = isDirectChild(grandchild, parent);
+      assert(result === false, 'Grandchild should not be direct child');
+    });
+
+    // Test 11: getBlockChildren with valid UID
+    runner.test('getBlockChildren - should retrieve block and children', () => {
+      const lines = getBlockChildren('test-uid-1', 0);
+      assert(lines.length > 0, 'Should return lines');
+      assert(lines[0].includes('Test Block 1'), 'Should contain block content');
+    });
+
+    // Test 12: getBlockChildren with empty UID
+    runner.test('getBlockChildren - should handle empty UID', () => {
+      const lines = getBlockChildren('', 0);
+      assert(lines.length === 0, 'Should return empty array for empty UID');
+    });
+
+    // Test 13: hasSelectedDescendants
+    runner.test('hasSelectedDescendants - should detect descendants in array', () => {
+      const parent = document.createElement('div');
+      const child = document.createElement('div');
+      const grandchild = document.createElement('div');
+
+      parent.appendChild(child);
+      child.appendChild(grandchild);
+
+      const containers = [parent, child, grandchild];
+      const result = hasSelectedDescendants(parent, containers);
+      assert(result === true, 'Should detect descendants');
+    });
+
+    // Test 14: getBlockTextOnly with null
+    runner.test('getBlockTextOnly - should handle null container', () => {
+      const result = getBlockTextOnly(null, 0);
+      assert(result === null, 'Should return null for null container');
+    });
+
+    // Test 15: showNotification
+    runner.test('showNotification - should create notification element', () => {
+      showNotification('Test', '#137CBD');
+      const notifications = document.querySelectorAll('div[style*="position: fixed"]');
+      assert(notifications.length > 0, 'Should create notification');
+    });
+
+    // Run all tests
+    runner.run();
+  </script>
+</body>
+</html>
