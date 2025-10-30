@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.2.0] - 2025-10-30
+
+### Added
+- **Collapsed block intelligence**: Now correctly handles filtered selections within collapsed blocks
+- `getAllDescendantUids()`: Recursively finds all descendants using Roam API
+- `findSelectedDescendants()`: Identifies which descendants are selected even when parent is collapsed
+- `buildPathToDescendants()`: Builds only the necessary paths to selected descendants
+- 7 additional unit tests for collapsed block functionality (total: 22 tests)
+
+### Fixed
+- **Major fix**: Collapsed blocks no longer copy all children indiscriminately
+- When a filtered block is inside a collapsed parent, only that branch is copied now
+- Example: Filtering for `#tag` inside collapsed "Conversación 3" now copies only the path to `#tag`, not all siblings
+
+### Technical
+- Enhanced `processContainer()` to detect collapsed blocks with selected descendants
+- Uses Roam API to traverse structure when DOM doesn't show children
+- Maintains backward compatibility: blocks without filtered descendants still copy all children
+
 ## [1.1.0] - 2025-10-29
 
 ### Added
