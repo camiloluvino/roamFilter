@@ -5,6 +5,7 @@ A Roam Research plugin that intelligently copies filtered and selected blocks wi
 ## Features
 
 - **Smart Selection**: Automatically detects when a parent block is selected along with its children
+- **Collapsed Block Intelligence**: Correctly handles filtered selections within collapsed blocks - only copies the paths to filtered content
 - **Full Descendant Copy**: Copies all descendants of leaf-selected blocks, even if collapsed
 - **Filter Aware**: Works perfectly with Roam's filter system - only copies what you've selected
 - **Keyboard Shortcut**: Alt+Shift+C to copy selected visible blocks
@@ -13,14 +14,20 @@ A Roam Research plugin that intelligently copies filtered and selected blocks wi
 
 The plugin uses intelligent logic to determine what to copy:
 
-1. If you select a parent block AND its children: 
+1. **If you select a parent block AND its children**:
    - Copies only the parent block text (without descendants)
    - Then copies each selected child with ALL its descendants
 
-2. If you select a block without selecting its children:
+2. **If you select a block without selecting its children**:
    - Copies that block with ALL its descendants (using Roam's API)
 
-This allows you to use Roam's filters to show only relevant blocks, select them, and copy everything including nested content.
+3. **If you select a COLLAPSED block with filtered content inside** (NEW in v1.2.0):
+   - Uses Roam API to detect which descendants are also selected
+   - Copies ONLY the path to those selected descendants
+   - Ignores sibling blocks that don't contain filtered content
+   - Example: Filtering `#important` inside a collapsed "Meeting Notes" will copy only the branch containing `#important`, not other meeting sections
+
+This allows you to use Roam's filters to show only relevant blocks, select them, and copy everything including nested content - even when parent blocks are collapsed.
 
 ## Installation
 
@@ -44,7 +51,9 @@ This extension will be submitted to Roam Depot for easier installation.
 3. Press **Alt+Shift+C**
 4. Paste anywhere - the content will be in proper Roam markdown format
 
-## Example
+## Examples
+
+### Example 1: Expanded blocks with filter
 
 **Before filtering:**
 ```
@@ -63,6 +72,31 @@ This extension will be submitted to Roam Depot for easier installation.
     - Point A
     - Point B
 ```
+
+### Example 2: Collapsed blocks with nested filter (NEW in v1.2.0)
+
+**Structure (collapsed "Conversación 3"):**
+```
+- ejemplo 2
+  - Conversación 3 [COLLAPSED]
+    - Resumen ejecutivo
+      - Punto clave 1
+        - Evidencia B #tomarEsto
+      - Punto clave 2
+      - Punto clave 3
+    - Recomendaciones
+```
+
+**After filtering by #tomarEsto and selecting "Conversación 3":**
+```
+- Conversación 3
+  - Resumen ejecutivo
+    - Punto clave 1
+      - Evidencia B #tomarEsto
+        - (all its descendants)
+```
+
+Note: "Punto clave 2", "Punto clave 3", and "Recomendaciones" are NOT copied because they're not on the path to the filtered content.
 
 ## Requirements
 
@@ -87,10 +121,13 @@ window.roamFilterCopyCleanup();
 
 ## Technical Features
 
+- **Collapsed block intelligence**: Uses Roam API to detect filtered content in collapsed blocks
+- **Selective path building**: Constructs only necessary paths to selected descendants
 - **Robust error handling**: All functions include try-catch blocks and input validation
 - **API safety checks**: Validates Roam API and Clipboard API availability before use
 - **Memory cleanup**: Provides cleanup function to remove event listeners
 - **Direct child detection**: Improved algorithm for detecting parent-child relationships
+- **Comprehensive testing**: 22 unit tests covering all major functionality
 
 ## License
 

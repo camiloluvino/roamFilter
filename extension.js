@@ -152,46 +152,181 @@ const getBlockTextOnly = (container, indent) => {
   return null;
 };
 
+// Recursively find all descendant UIDs of a block using Roam API
+const getAllDescendantUids = (blockUid) => {
+  const descendants = [];
+
+  if (!isRoamAPIAvailable() || !blockUid) {
+    return descendants;
+  }
+
+  try {
+    const blockInfo = window.roamAlphaAPI.pull(
+      "[:block/uid {:block/children ...}]",
+      [":block/uid", blockUid]
+    );
+
+    if (blockInfo && blockInfo[":block/children"]) {
+      const children = blockInfo[":block/children"];
+      children.forEach(child => {
+        const childUid = child[":block/uid"];
+        if (childUid) {
+          descendants.push(childUid);
+          // Recursively get descendants of this child
+          const childDescendants = getAllDescendantUids(childUid);
+          descendants.push(...childDescendants);
+        }
+      });
+    }
+  } catch (err) {
+    console.error("Error in getAllDescendantUids:", err);
+  }
+
+  return descendants;
+};
+
+// Find which descendants of a block are selected (by checking against selected UIDs)
+const findSelectedDescendants = (blockUid, selectedUids) => {
+  const allDescendants = getAllDescendantUids(blockUid);
+  return allDescendants.filter(uid => selectedUids.has(uid));
+};
+
+// Build a map of UID to path - for each selected descendant, build the path from parent to it
+const buildPathToDescendants = (parentUid, targetUids, currentIndent) => {
+  const lines = [];
+
+  if (!isRoamAPIAvailable() || !parentUid || targetUids.size === 0) {
+    return lines;
+  }
+
+  try {
+    const blockInfo = window.roamAlphaAPI.pull(
+      "[:block/string {:block/children [:block/uid :block/order]}]",
+      [":block/uid", parentUid]
+    );
+
+    if (!blockInfo) return lines;
+
+    // Add parent block text
+    if (blockInfo[":block/string"]) {
+      const content = blockInfo[":block/string"];
+      const indent = '  '.repeat(currentIndent);
+      lines.push(`${indent}- ${content}`);
+    }
+
+    // Check if this block is a target (selected descendant)
+    const isTarget = targetUids.has(parentUid);
+
+    if (isTarget) {
+      // This is a selected descendant - copy all its children
+      if (blockInfo[":block/children"]) {
+        const children = blockInfo[":block/children"];
+        const sortedChildren = children.sort((a, b) => {
+          return (a[":block/order"] || 0) - (b[":block/order"] || 0);
+        });
+
+        sortedChildren.forEach(child => {
+          const childUid = child[":block/uid"];
+          if (childUid) {
+            const childLines = getBlockChildren(childUid, currentIndent + 1);
+            lines.push(...childLines);
+          }
+        });
+      }
+    } else {
+      // Not a target - check if any children are on the path to targets
+      if (blockInfo[":block/children"]) {
+        const children = blockInfo[":block/children"];
+        const sortedChildren = children.sort((a, b) => {
+          return (a[":block/order"] || 0) - (b[":block/order"] || 0);
+        });
+
+        sortedChildren.forEach(child => {
+          const childUid = child[":block/uid"];
+          if (childUid) {
+            // Check if this child or its descendants contain any targets
+            const childDescendants = getAllDescendantUids(childUid);
+            const hasTargetInBranch = targetUids.has(childUid) ||
+                                     childDescendants.some(desc => targetUids.has(desc));
+
+            if (hasTargetInBranch) {
+              // Recursively build path through this child
+              const childLines = buildPathToDescendants(childUid, targetUids, currentIndent + 1);
+              lines.push(...childLines);
+            }
+          }
+        });
+      }
+    }
+  } catch (err) {
+    console.error("Error in buildPathToDescendants:", err);
+  }
+
+  return lines;
+};
+
 const copyVisibleBlocks = (event) => {
   event.preventDefault();
   event.stopPropagation();
-  
+
   const selectedContainers = Array.from(document.querySelectorAll('.block-highlight-blue'));
-  
+
   if (selectedContainers.length === 0) {
     return;
   }
-  
+
+  // Extract all selected UIDs for checking collapsed descendants
+  const selectedUids = new Set();
+  selectedContainers.forEach(container => {
+    const uid = getBlockUidFromElement(container);
+    if (uid) {
+      selectedUids.add(uid);
+    }
+  });
+
   const topLevelContainers = selectedContainers.filter(container => {
-    return !selectedContainers.some(otherContainer => 
+    return !selectedContainers.some(otherContainer =>
       otherContainer !== container && isDescendantOf(container, otherContainer)
     );
   });
-  
+
   let allLines = [];
-  
+
   const processContainer = (container, baseIndent) => {
     const blockUid = getBlockUidFromElement(container);
     if (!blockUid) return;
-    
+
     const hasSelectedChildren = hasSelectedDescendants(container, selectedContainers);
-    
+
     if (hasSelectedChildren) {
+      // Has visible children in DOM - process normally
       const blockText = getBlockTextOnly(container, baseIndent);
       if (blockText) {
         allLines.push(blockText);
       }
-      
+
       const selectedChildren = selectedContainers.filter(child =>
         isDirectChild(child, container)
       );
-      
+
       selectedChildren.forEach(child => {
         processContainer(child, baseIndent + 1);
       });
     } else {
-      const blockLines = getBlockChildren(blockUid, baseIndent);
-      allLines.push(...blockLines);
+      // No visible children in DOM - check if collapsed with selected descendants
+      const selectedDescendantUids = findSelectedDescendants(blockUid, selectedUids);
+
+      if (selectedDescendantUids.length > 0) {
+        // Found selected descendants in collapsed block - build paths to them only
+        console.log(`Block ${blockUid} is collapsed but has ${selectedDescendantUids.length} selected descendants`);
+        const targetUidsSet = new Set(selectedDescendantUids);
+        const pathLines = buildPathToDescendants(blockUid, targetUidsSet, baseIndent);
+        allLines.push(...pathLines);
+      } else {
+        // No selected descendants - copy entire block with all children (original behavior)
+        const blockLines = getBlockChildren(blockUid, baseIndent);
+        allLines.push(...blockLines);
+      }
     }
   };
   
