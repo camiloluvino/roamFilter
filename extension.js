@@ -254,9 +254,17 @@ const copyVisibleBlocks = (event) => {
     const selectedDescendantUids = findSelectedDescendants(blockUid, selectedUids);
 
     if (selectedDescendantUids.length > 0) {
-      // Has selected descendants - build paths ONLY to those descendants
-      console.log(`Block ${blockUid} has ${selectedDescendantUids.length} selected descendants - building selective paths`);
-      const targetUidsSet = new Set(selectedDescendantUids);
+      // Has selected descendants - filter to get only LEAF targets
+      // (selected blocks that don't have other selected descendants)
+      const leafTargets = selectedDescendantUids.filter(uid => {
+        const descendants = getAllDescendantUids(uid);
+        const hasSelectedDescendants = descendants.some(desc => selectedUids.has(desc));
+        return !hasSelectedDescendants;
+      });
+
+      console.log(`Block ${blockUid} has ${selectedDescendantUids.length} selected descendants, ${leafTargets.length} are leaf targets - building selective paths`);
+
+      const targetUidsSet = new Set(leafTargets);
       const pathLines = buildPathToDescendants(blockUid, targetUidsSet, baseIndent);
       allLines.push(...pathLines);
     } else {

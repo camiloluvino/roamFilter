@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.1.2] - 2025-11-07
+
+### Fixed
+- **Critical fix**: Now correctly excludes sibling blocks that don't contain filtered targets
+- When filtering and selecting hierarchies, only copies branches containing leaf targets
+- Example: "Metodología propuesta" and "Conclusiones" no longer copied when only "Introducción #filtrarEsto" is the target
+
+### Technical
+- Modified `processContainer` to filter `selectedDescendantUids` to only leaf targets before passing to `buildPathToDescendants`
+- Leaf targets = selected blocks with NO other selected descendants
+- This prevents intermediate selected blocks from being treated as copy destinations
+
 ## [2.1.1] - 2025-11-07
 
 ### Fixed
