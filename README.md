@@ -1,26 +1,32 @@
-# Roam Filter Copy - Copy Filtered Blocks with All Descendants
+# Roam Filter Copy - Smart Copy for Filtered Blocks
 
-A Roam Research plugin that copies filtered and selected blocks with ALL their descendants.
+A Roam Research plugin that intelligently copies filtered blocks while respecting your selection.
 
 ## Features
 
-- **Simple and Efficient**: Select visible blocks after filtering → Copy with ALL descendants
+- **Smart Path Building**: When you select descendant blocks, only copies paths to those blocks
+- **Complete Hierarchy Copy**: When no descendants are selected, copies everything
 - **Filter Aware**: Works perfectly with Roam's filter system
-- **Handles Collapsed Blocks**: Uses Roam API to copy complete hierarchies even when collapsed
-- **Preserves Structure**: Includes necessary ancestors to maintain hierarchy
+- **Handles Collapsed Blocks**: Uses Roam API to work even when blocks are collapsed
+- **Automatic Deduplication**: Removes redundant selections when parent and child are both selected
 - **Keyboard Shortcut**: Alt+Shift+C to copy selected visible blocks
 
 ## How It Works
 
-The plugin uses simple, straightforward logic:
+The plugin uses intelligent logic to determine what to copy:
 
-1. **Apply a filter** to show only relevant blocks (e.g., filter by `#important`)
-2. **Select the visible blocks** you want to copy
+**When filtering by tags (e.g., `#important`):**
+
+1. **Apply your filter** - Roam shows only blocks matching your criteria
+2. **Select visible blocks** - Usually the filter result blocks or their parents
 3. **Press Alt+Shift+C**
-4. **Each selected block is copied with ALL its descendants** (expanded or collapsed)
-5. **Ancestors are included** to maintain the hierarchical structure
 
-The plugin automatically removes duplicates if you select both a parent and its descendants - it will copy the top-level selection with everything underneath.
+**The plugin then decides:**
+
+- **If the selected block has descendants that are ALSO selected**: Copies ONLY the paths to those descendants (filtering out unrelated branches)
+- **If the selected block has NO descendants selected**: Copies the entire block with ALL its children
+
+This means: When you filter and select results, you get ONLY the filtered content. When you select a single block without filtering, you get everything.
 
 ## Installation
 
@@ -84,47 +90,57 @@ Roam shows only:
 
 ---
 
-### Example 2: Collapsed blocks with nested filter
+### Example 2: Selective copy with nested filter
 
-**Original structure (with "Conversación 3" collapsed):**
+**Original structure:**
 ```
 - ejemplo 2
-  ▶ Conversación 3 [COLLAPSED]
-      - Resumen ejecutivo
-        - Punto clave 1
-          - Evidencia A
-          - Evidencia B #filtrarEsto
-            - Detalle 1
-            - Detalle 2
-        - Punto clave 2
-        - Punto clave 3
-      - Recomendaciones
+  - Conversación 1 #resumen
+    - Introducción #filtrarEsto
+      - Contexto histórico
+      - Marco teórico
+    - Metodología propuesta
+    - Conclusiones preliminares
+  - Conversación 2 #discusión
+    - Debate sobre los resultados
+  - Conversación 3 #resumen
+    - Resumen ejecutivo
+      - Punto clave 1
+      - Punto clave 2 #filtrarEsto
+        - Justificación teórica
+    - Recomendaciones
 ```
 
 **After filtering by #filtrarEsto:**
-Roam shows:
+Roam shows only:
 ```
 - ejemplo 2
-  - Conversación 3 [Still shows as collapsed but contains filtered content]
+  - Conversación 1
+    - Introducción #filtrarEsto
+  - Conversación 3
+    - Resumen ejecutivo
+      - Punto clave 2 #filtrarEsto
 ```
 
-**You select "Conversación 3", then Alt+Shift+C:**
+**You select "ejemplo 2" (which now has visible descendants selected), then Alt+Shift+C:**
 ```
-- Conversación 3
-  - Resumen ejecutivo
-    - Punto clave 1
-      - Evidencia A
-      - Evidencia B #filtrarEsto
-        - Detalle 1
-        - Detalle 2
-    - Punto clave 2
-    - Punto clave 3
-  - Recomendaciones
+- ejemplo 2
+  - Conversación 1 #resumen
+    - Introducción #filtrarEsto
+      - Contexto histórico
+      - Marco teórico
+  - Conversación 3 #resumen
+    - Resumen ejecutivo
+      - Punto clave 2 #filtrarEsto
+        - Justificación teórica
 ```
 
-✅ Copies the ENTIRE block with ALL descendants
-✅ Works even when collapsed
-✅ Uses Roam API to get complete structure
+✅ Copies ONLY branches containing filtered blocks
+✅ "Conversación 2" NOT copied (no filtered content)
+✅ "Metodología propuesta" NOT copied (no filtered content)
+✅ "Punto clave 1" NOT copied (no filtered content)
+✅ "Recomendaciones" NOT copied (no filtered content)
+✅ Each filtered block includes ALL its descendants
 
 ## Requirements
 

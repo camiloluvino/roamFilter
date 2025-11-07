@@ -1,28 +1,29 @@
 # Changelog
 
-## [2.0.0] - 2025-11-07
-
-### Changed
-- **Major simplification**: Removed complex conditional logic in favor of straightforward "copy all descendants" approach
-- Each selected block now ALWAYS copies with ALL its descendants (expanded or collapsed)
-- Removed ~150 lines of unnecessary code for better maintainability and performance
-
-### Removed
-- `hasSelectedDescendants()` - No longer needed with simplified logic
-- `isDirectChild()` - No longer needed with simplified logic
-- `getBlockTextOnly()` - No longer needed with simplified logic
-- `getAllDescendantUids()` - No longer needed with simplified logic
-- `findSelectedDescendants()` - No longer needed with simplified logic
-- `buildPathToDescendants()` - No longer needed with simplified logic
+## [2.1.0] - 2025-11-07
 
 ### Fixed
-- **Critical fix**: Now correctly handles selection of non-direct descendants (grandchildren, great-grandchildren, etc.)
-- Works correctly when filtering reveals blocks at different nesting levels
+- **Critical fix**: Now correctly filters out unrelated branches when copying filtered selections
+- When a block has selected descendants, ONLY paths to those descendants are copied (not the entire tree)
+- Restored path-building logic that was incorrectly removed in v2.0.0
+
+### Changed
+- Simplified path detection logic - removed DOM-based child detection
+- Now uses only UID-based descendant detection for more reliable filtering
 
 ### Technical
-- Reduced code complexity from O(n²) to O(n)
-- Improved performance by eliminating redundant API calls
-- Clearer code structure for easier debugging and maintenance
+- Restored: `getAllDescendantUids()`, `findSelectedDescendants()`, `buildPathToDescendants()`
+- Removed unreliable DOM traversal functions: `hasSelectedDescendants()`, `isDirectChild()`, `getBlockTextOnly()`
+- More efficient: Single check for selected descendants, no complex branching
+
+## [2.0.0] - 2025-11-07 [YANKED]
+
+### Issues
+- **Bug**: Copied ALL descendants even when filtering should exclude branches
+- Over-simplified logic didn't account for selective path building
+
+### Changed
+- Attempted simplification by removing path-building logic (incorrect approach)
 
 ## [1.2.0] - 2025-10-30
 
