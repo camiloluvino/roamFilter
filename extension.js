@@ -163,8 +163,13 @@ const buildPathToDescendants = (parentUid, targetUids, currentIndent) => {
     // Check if this block is a target (selected descendant)
     const isTarget = targetUids.has(parentUid);
 
-    if (isTarget) {
-      // This is a selected descendant - copy all its children
+    // Check if any of its descendants are also targets
+    const descendants = getAllDescendantUids(parentUid);
+    const hasTargetDescendants = descendants.some(desc => targetUids.has(desc));
+
+    if (isTarget && !hasTargetDescendants) {
+      // This is a LEAF target (no selected descendants) - copy ALL its children
+      console.log(`Block ${parentUid} is a leaf target - copying all children`);
       if (blockInfo[":block/children"]) {
         const children = blockInfo[":block/children"];
         const sortedChildren = children.sort((a, b) => {
@@ -180,7 +185,8 @@ const buildPathToDescendants = (parentUid, targetUids, currentIndent) => {
         });
       }
     } else {
-      // Not a target - check if any children are on the path to targets
+      // Either not a target, or is a target with selected descendants
+      // Only process children that are on the path to targets
       if (blockInfo[":block/children"]) {
         const children = blockInfo[":block/children"];
         const sortedChildren = children.sort((a, b) => {

@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.1.1] - 2025-11-07
+
+### Fixed
+- **Critical fix**: Intermediate selected blocks (like "Conversación 1") no longer copy their entire tree
+- Only "leaf targets" (selected blocks with NO selected descendants) copy their entire tree
+- Intermediate blocks now correctly act as path segments, not copy destinations
+
+### Technical
+- Added `hasTargetDescendants` check in `buildPathToDescendants()`
+- Distinguishes between leaf targets (copy all) and intermediate targets (path only)
+
 ## [2.1.0] - 2025-11-07
 
 ### Fixed
