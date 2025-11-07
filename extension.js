@@ -201,6 +201,8 @@ const buildPathToDescendants = (parentUid, targetUids, currentIndent) => {
             const hasTargetInBranch = targetUids.has(childUid) ||
                                      childDescendants.some(desc => targetUids.has(desc));
 
+            console.log(`Checking child ${childUid}: hasTargetInBranch=${hasTargetInBranch}, isTarget=${targetUids.has(childUid)}, descendantsWithTargets=${childDescendants.filter(d => targetUids.has(d)).length}`);
+
             if (hasTargetInBranch) {
               // Recursively build path through this child
               const childLines = buildPathToDescendants(childUid, targetUids, currentIndent + 1);
