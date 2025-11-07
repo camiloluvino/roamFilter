@@ -1,33 +1,26 @@
-# Roam Filter Copy - Copy Only Visible Blocks
+# Roam Filter Copy - Copy Filtered Blocks with All Descendants
 
-A Roam Research plugin that intelligently copies filtered and selected blocks with their descendants.
+A Roam Research plugin that copies filtered and selected blocks with ALL their descendants.
 
 ## Features
 
-- **Smart Selection**: Automatically detects when a parent block is selected along with its children
-- **Collapsed Block Intelligence**: Correctly handles filtered selections within collapsed blocks - only copies the paths to filtered content
-- **Full Descendant Copy**: Copies all descendants of leaf-selected blocks, even if collapsed
-- **Filter Aware**: Works perfectly with Roam's filter system - only copies what you've selected
+- **Simple and Efficient**: Select visible blocks after filtering → Copy with ALL descendants
+- **Filter Aware**: Works perfectly with Roam's filter system
+- **Handles Collapsed Blocks**: Uses Roam API to copy complete hierarchies even when collapsed
+- **Preserves Structure**: Includes necessary ancestors to maintain hierarchy
 - **Keyboard Shortcut**: Alt+Shift+C to copy selected visible blocks
 
 ## How It Works
 
-The plugin uses intelligent logic to determine what to copy:
+The plugin uses simple, straightforward logic:
 
-1. **If you select a parent block AND its children**:
-   - Copies only the parent block text (without descendants)
-   - Then copies each selected child with ALL its descendants
+1. **Apply a filter** to show only relevant blocks (e.g., filter by `#important`)
+2. **Select the visible blocks** you want to copy
+3. **Press Alt+Shift+C**
+4. **Each selected block is copied with ALL its descendants** (expanded or collapsed)
+5. **Ancestors are included** to maintain the hierarchical structure
 
-2. **If you select a block without selecting its children**:
-   - Copies that block with ALL its descendants (using Roam's API)
-
-3. **If you select a COLLAPSED block with filtered content inside** (NEW in v1.2.0):
-   - Uses Roam API to detect which descendants are also selected
-   - Copies ONLY the path to those selected descendants
-   - Ignores sibling blocks that don't contain filtered content
-   - Example: Filtering `#important` inside a collapsed "Meeting Notes" will copy only the branch containing `#important`, not other meeting sections
-
-This allows you to use Roam's filters to show only relevant blocks, select them, and copy everything including nested content - even when parent blocks are collapsed.
+The plugin automatically removes duplicates if you select both a parent and its descendants - it will copy the top-level selection with everything underneath.
 
 ## Installation
 
@@ -53,9 +46,9 @@ This extension will be submitted to Roam Depot for easier installation.
 
 ## Examples
 
-### Example 1: Expanded blocks with filter
+### Example 1: Simple filter and copy
 
-**Before filtering:**
+**Original structure:**
 ```
 - Meeting Notes
   - Discussion #important
@@ -63,40 +56,75 @@ This extension will be submitted to Roam Depot for easier installation.
     - Point B
   - Random thoughts #personal
     - Point C
+  - Action items #important
+    - Task 1
+    - Task 2
 ```
 
-**After filtering by #important and selecting:**
+**After filtering by #important:**
+Roam shows only:
 ```
 - Meeting Notes
   - Discussion #important
-    - Point A
-    - Point B
+  - Action items #important
 ```
 
-### Example 2: Collapsed blocks with nested filter (NEW in v1.2.0)
+**You select "Discussion #important" and "Action items #important", then Alt+Shift+C:**
+```
+- Discussion #important
+  - Point A
+  - Point B
+- Action items #important
+  - Task 1
+  - Task 2
+```
 
-**Structure (collapsed "Conversación 3"):**
+✅ Each selected block copied with ALL its descendants
+✅ Maintains proper hierarchy and indentation
+
+---
+
+### Example 2: Collapsed blocks with nested filter
+
+**Original structure (with "Conversación 3" collapsed):**
 ```
 - ejemplo 2
-  - Conversación 3 [COLLAPSED]
-    - Resumen ejecutivo
-      - Punto clave 1
-        - Evidencia B #tomarEsto
-      - Punto clave 2
-      - Punto clave 3
-    - Recomendaciones
+  ▶ Conversación 3 [COLLAPSED]
+      - Resumen ejecutivo
+        - Punto clave 1
+          - Evidencia A
+          - Evidencia B #filtrarEsto
+            - Detalle 1
+            - Detalle 2
+        - Punto clave 2
+        - Punto clave 3
+      - Recomendaciones
 ```
 
-**After filtering by #tomarEsto and selecting "Conversación 3":**
+**After filtering by #filtrarEsto:**
+Roam shows:
+```
+- ejemplo 2
+  - Conversación 3 [Still shows as collapsed but contains filtered content]
+```
+
+**You select "Conversación 3", then Alt+Shift+C:**
 ```
 - Conversación 3
   - Resumen ejecutivo
     - Punto clave 1
-      - Evidencia B #tomarEsto
-        - (all its descendants)
+      - Evidencia A
+      - Evidencia B #filtrarEsto
+        - Detalle 1
+        - Detalle 2
+    - Punto clave 2
+    - Punto clave 3
+  - Recomendaciones
 ```
 
-Note: "Punto clave 2", "Punto clave 3", and "Recomendaciones" are NOT copied because they're not on the path to the filtered content.
+✅ Copies the ENTIRE block with ALL descendants
+✅ Works even when collapsed
+✅ Uses Roam API to get complete structure
 
 ## Requirements
 
@@ -121,13 +149,13 @@ window.roamFilterCopyCleanup();
 
 ## Technical Features
 
-- **Collapsed block intelligence**: Uses Roam API to detect filtered content in collapsed blocks
-- **Selective path building**: Constructs only necessary paths to selected descendants
+- **Simple and efficient logic**: Straightforward algorithm without unnecessary complexity
+- **Complete hierarchy copy**: Uses Roam API to copy full block trees even when collapsed
+- **Automatic deduplication**: Filters out descendant selections when parent is also selected
 - **Robust error handling**: All functions include try-catch blocks and input validation
 - **API safety checks**: Validates Roam API and Clipboard API availability before use
 - **Memory cleanup**: Provides cleanup function to remove event listeners
-- **Direct child detection**: Improved algorithm for detecting parent-child relationships
-- **Comprehensive testing**: 22 unit tests covering all major functionality
+- **Lightweight**: Minimal code footprint for maximum performance
 
 ## License
 

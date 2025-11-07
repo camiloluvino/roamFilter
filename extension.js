@@ -1,6 +1,9 @@
-// Copy Visible Blocks with Smart Descendant Selection
+// Roam Filter Copy - Copy Filtered Blocks with All Descendants
 // Created by Camilo Luvino
 // https://github.com/camiloluvino/roamFilter
+//
+// Simple and efficient: Copies selected blocks (after filtering) with ALL their descendants.
+// Use case: Filter by tags → Select visible blocks → Alt+Shift+C → Paste with full hierarchy
 
 // Check if Roam API is available
 const isRoamAPIAvailable = () => {
@@ -93,178 +96,6 @@ const isDescendantOf = (childContainer, potentialAncestorContainer) => {
   return false;
 };
 
-const hasSelectedDescendants = (container, allSelectedContainers) => {
-  return allSelectedContainers.some(otherContainer =>
-    otherContainer !== container && isDescendantOf(otherContainer, container)
-  );
-};
-
-// Check if child is a direct child of parent (not a grandchild or deeper)
-const isDirectChild = (childContainer, parentContainer) => {
-  try {
-    if (!childContainer || !parentContainer) {
-      return false;
-    }
-
-    // Navigate up from child to find its immediate parent block container
-    let current = childContainer.parentElement;
-    while (current && current !== parentContainer) {
-      // If we find another block container before reaching parent, it's not a direct child
-      if (current.classList && current.classList.contains('roam-block-container') && current !== parentContainer) {
-        return false;
-      }
-      current = current.parentElement;
-    }
-
-    // If we reached the parent, it's a direct child
-    return current === parentContainer;
-  } catch (err) {
-    console.error("Error in isDirectChild:", err);
-    return false;
-  }
-};
-
-const getBlockTextOnly = (container, indent) => {
-  try {
-    if (!container) {
-      return null;
-    }
-
-    const blockMain = container.querySelector('.rm-block-main');
-    if (blockMain) {
-      const editableArea = blockMain.querySelector('.rm-block__input, [contenteditable="true"]');
-      let blockContent = '';
-
-      if (editableArea) {
-        blockContent = editableArea.textContent || editableArea.innerText;
-      } else {
-        blockContent = blockMain.textContent || blockMain.innerText;
-      }
-
-      blockContent = blockContent.trim();
-      if (blockContent) {
-        return '  '.repeat(indent) + '- ' + blockContent;
-      }
-    }
-  } catch (err) {
-    console.error("Error in getBlockTextOnly:", err);
-  }
-  return null;
-};
-
-// Recursively find all descendant UIDs of a block using Roam API
-const getAllDescendantUids = (blockUid) => {
-  const descendants = [];
-
-  if (!isRoamAPIAvailable() || !blockUid) {
-    return descendants;
-  }
-
-  try {
-    const blockInfo = window.roamAlphaAPI.pull(
-      "[:block/uid {:block/children ...}]",
-      [":block/uid", blockUid]
-    );
-
-    if (blockInfo && blockInfo[":block/children"]) {
-      const children = blockInfo[":block/children"];
-      children.forEach(child => {
-        const childUid = child[":block/uid"];
-        if (childUid) {
-          descendants.push(childUid);
-          // Recursively get descendants of this child
-          const childDescendants = getAllDescendantUids(childUid);
-          descendants.push(...childDescendants);
-        }
-      });
-    }
-  } catch (err) {
-    console.error("Error in getAllDescendantUids:", err);
-  }
-
-  return descendants;
-};
-
-// Find which descendants of a block are selected (by checking against selected UIDs)
-const findSelectedDescendants = (blockUid, selectedUids) => {
-  const allDescendants = getAllDescendantUids(blockUid);
-  return allDescendants.filter(uid => selectedUids.has(uid));
-};
-
-// Build a map of UID to path - for each selected descendant, build the path from parent to it
-const buildPathToDescendants = (parentUid, targetUids, currentIndent) => {
-  const lines = [];
-
-  if (!isRoamAPIAvailable() || !parentUid || targetUids.size === 0) {
-    return lines;
-  }
-
-  try {
-    const blockInfo = window.roamAlphaAPI.pull(
-      "[:block/string {:block/children [:block/uid :block/order]}]",
-      [":block/uid", parentUid]
-    );
-
-    if (!blockInfo) return lines;
-
-    // Add parent block text
-    if (blockInfo[":block/string"]) {
-      const content = blockInfo[":block/string"];
-      const indent = '  '.repeat(currentIndent);
-      lines.push(`${indent}- ${content}`);
-    }
-
-    // Check if this block is a target (selected descendant)
-    const isTarget = targetUids.has(parentUid);
-
-    if (isTarget) {
-      // This is a selected descendant - copy all its children
-      if (blockInfo[":block/children"]) {
-        const children = blockInfo[":block/children"];
-        const sortedChildren = children.sort((a, b) => {
-          return (a[":block/order"] || 0) - (b[":block/order"] || 0);
-        });
-
-        sortedChildren.forEach(child => {
-          const childUid = child[":block/uid"];
-          if (childUid) {
-            const childLines = getBlockChildren(childUid, currentIndent + 1);
-            lines.push(...childLines);
-          }
-        });
-      }
-    } else {
-      // Not a target - check if any children are on the path to targets
-      if (blockInfo[":block/children"]) {
-        const children = blockInfo[":block/children"];
-        const sortedChildren = children.sort((a, b) => {
-          return (a[":block/order"] || 0) - (b[":block/order"] || 0);
-        });
-
-        sortedChildren.forEach(child => {
-          const childUid = child[":block/uid"];
-          if (childUid) {
-            // Check if this child or its descendants contain any targets
-            const childDescendants = getAllDescendantUids(childUid);
-            const hasTargetInBranch = targetUids.has(childUid) ||
-                                     childDescendants.some(desc => targetUids.has(desc));
-
-            if (hasTargetInBranch) {
-              // Recursively build path through this child
-              const childLines = buildPathToDescendants(childUid, targetUids, currentIndent + 1);
-              lines.push(...childLines);
-            }
-          }
-        });
-      }
-    }
-  } catch (err) {
-    console.error("Error in buildPathToDescendants:", err);
-  }
-
-  return lines;
-};
-
 const copyVisibleBlocks = (event) => {
   event.preventDefault();
   event.stopPropagation();
@@ -275,15 +106,7 @@ const copyVisibleBlocks = (event) => {
     return;
   }
 
-  // Extract all selected UIDs for checking collapsed descendants
-  const selectedUids = new Set();
-  selectedContainers.forEach(container => {
-    const uid = getBlockUidFromElement(container);
-    if (uid) {
-      selectedUids.add(uid);
-    }
-  });
-
+  // Filter to get only top-level selected blocks (no ancestors selected)
   const topLevelContainers = selectedContainers.filter(container => {
     return !selectedContainers.some(otherContainer =>
       otherContainer !== container && isDescendantOf(container, otherContainer)
@@ -292,44 +115,17 @@ const copyVisibleBlocks = (event) => {
 
   let allLines = [];
 
+  // Process each top-level block: copy it with ALL its descendants
   const processContainer = (container, baseIndent) => {
     const blockUid = getBlockUidFromElement(container);
     if (!blockUid) return;
 
-    const hasSelectedChildren = hasSelectedDescendants(container, selectedContainers);
-
-    if (hasSelectedChildren) {
-      // Has visible children in DOM - process normally
-      const blockText = getBlockTextOnly(container, baseIndent);
-      if (blockText) {
-        allLines.push(blockText);
-      }
-
-      const selectedChildren = selectedContainers.filter(child =>
-        isDirectChild(child, container)
-      );
-
-      selectedChildren.forEach(child => {
-        processContainer(child, baseIndent + 1);
-      });
-    } else {
-      // No visible children in DOM - check if collapsed with selected descendants
-      const selectedDescendantUids = findSelectedDescendants(blockUid, selectedUids);
-
-      if (selectedDescendantUids.length > 0) {
-        // Found selected descendants in collapsed block - build paths to them only
-        console.log(`Block ${blockUid} is collapsed but has ${selectedDescendantUids.length} selected descendants`);
-        const targetUidsSet = new Set(selectedDescendantUids);
-        const pathLines = buildPathToDescendants(blockUid, targetUidsSet, baseIndent);
-        allLines.push(...pathLines);
-      } else {
-        // No selected descendants - copy entire block with all children (original behavior)
-        const blockLines = getBlockChildren(blockUid, baseIndent);
-        allLines.push(...blockLines);
-      }
-    }
+    // Simply copy the block with ALL its descendants using Roam API
+    const blockLines = getBlockChildren(blockUid, baseIndent);
+    allLines.push(...blockLines);
   };
-  
+
+  // Calculate base indentation and process each top-level container
   topLevelContainers.forEach((container) => {
     let baseIndentLevel = 0;
     let currentElement = container;
@@ -339,10 +135,10 @@ const copyVisibleBlocks = (event) => {
       }
       currentElement = currentElement.parentElement?.closest('.rm-block__children');
     }
-    
+
     processContainer(container, Math.max(0, baseIndentLevel - 1));
   });
-  
+
   const finalContent = allLines.join('\n');
 
   if (finalContent) {

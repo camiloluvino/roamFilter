@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.0.0] - 2025-11-07
+
+### Changed
+- **Major simplification**: Removed complex conditional logic in favor of straightforward "copy all descendants" approach
+- Each selected block now ALWAYS copies with ALL its descendants (expanded or collapsed)
+- Removed ~150 lines of unnecessary code for better maintainability and performance
+
+### Removed
+- `hasSelectedDescendants()` - No longer needed with simplified logic
+- `isDirectChild()` - No longer needed with simplified logic
+- `getBlockTextOnly()` - No longer needed with simplified logic
+- `getAllDescendantUids()` - No longer needed with simplified logic
+- `findSelectedDescendants()` - No longer needed with simplified logic
+- `buildPathToDescendants()` - No longer needed with simplified logic
+
+### Fixed
+- **Critical fix**: Now correctly handles selection of non-direct descendants (grandchildren, great-grandchildren, etc.)
+- Works correctly when filtering reveals blocks at different nesting levels
+
+### Technical
+- Reduced code complexity from O(n²) to O(n)
+- Improved performance by eliminating redundant API calls
+- Clearer code structure for easier debugging and maintenance
+
 ## [1.2.0] - 2025-10-30
 
 ### Added
