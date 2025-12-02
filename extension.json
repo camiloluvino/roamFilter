@@ -1,0 +1,8 @@
+{
+  "name": "roam-filter-copy",
+  "description": "Intelligently copies filtered blocks while respecting your selection. Copies only paths to selected descendants when filtering.",
+  "author": "Camilo Luvino",
+  "entry": "extension.js",
+  "source": "https://github.com/camiloluvino/roamFilter",
+  "license": "MIT"
+}

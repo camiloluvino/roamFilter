@@ -17,8 +17,8 @@ let blockInfoCache = null;
 // Check if Roam API is available
 const isRoamAPIAvailable = () => {
   return typeof window !== 'undefined' &&
-         window.roamAlphaAPI &&
-         typeof window.roamAlphaAPI.pull === 'function';
+    window.roamAlphaAPI &&
+    typeof window.roamAlphaAPI.pull === 'function';
 };
 
 // Helper to get block info with caching
@@ -35,17 +35,16 @@ const getBlockInfo = (blockUid, query) => {
   return blockInfo;
 };
 
-const getBlockChildren = (blockUid, currentIndent) => {
-  const lines = [];
-
+// Helper to recursively build a tree of block nodes
+const getBlockTree = (blockUid) => {
   if (!blockUid) {
-    if (DEBUG) console.warn("getBlockChildren called with empty blockUid");
-    return lines;
+    if (DEBUG) console.warn("getBlockTree called with empty blockUid");
+    return null;
   }
 
   if (!isRoamAPIAvailable()) {
     console.error("Roam API is not available");
-    return lines;
+    return null;
   }
 
   try {
@@ -53,32 +52,36 @@ const getBlockChildren = (blockUid, currentIndent) => {
       blockUid,
       "[:block/string {:block/children [:block/uid :block/order]}]"
     );
-    
-    if (blockInfo && blockInfo[":block/string"]) {
-      const content = blockInfo[":block/string"];
-      const indent = '  '.repeat(currentIndent);
-      lines.push(`${indent}- ${content}`);
-    }
-    
-    if (blockInfo && blockInfo[":block/children"]) {
+
+    if (!blockInfo) return null;
+
+    const node = {
+      content: blockInfo[":block/string"] || "",
+      children: []
+    };
+
+    if (blockInfo[":block/children"]) {
       const children = blockInfo[":block/children"];
       const sortedChildren = children.sort((a, b) => {
         return (a[":block/order"] || 0) - (b[":block/order"] || 0);
       });
-      
+
       sortedChildren.forEach(child => {
         const childUid = child[":block/uid"];
         if (childUid) {
-          const childLines = getBlockChildren(childUid, currentIndent + 1);
-          lines.push(...childLines);
+          const childNode = getBlockTree(childUid);
+          if (childNode) {
+            node.children.push(childNode);
+          }
         }
       });
     }
+
+    return node;
   } catch (err) {
-    console.error("Error in getBlockChildren:", err);
+    console.error("Error in getBlockTree:", err);
+    return null;
   }
-  
-  return lines;
 };
 
 const getBlockUidFromElement = (container) => {
@@ -166,13 +169,10 @@ const findSelectedDescendants = (blockUid, selectedUids) => {
   return allDescendants.filter(uid => selectedUids.has(uid));
 };
 
-// Build a map of UID to path - for each selected descendant, build the path from parent to it
-// Performance optimization: Reuses cached descendants and blockInfo
-const buildPathToDescendants = (parentUid, targetUids, currentIndent, descendantsMap = null) => {
-  const lines = [];
-
+// Build a tree of nodes for selected descendants path
+const buildPathTree = (parentUid, targetUids) => {
   if (!isRoamAPIAvailable() || !parentUid || targetUids.size === 0) {
-    return lines;
+    return null;
   }
 
   try {
@@ -181,14 +181,12 @@ const buildPathToDescendants = (parentUid, targetUids, currentIndent, descendant
       "[:block/string {:block/children [:block/uid :block/order]}]"
     );
 
-    if (!blockInfo) return lines;
+    if (!blockInfo) return null;
 
-    // Add parent block text
-    if (blockInfo[":block/string"]) {
-      const content = blockInfo[":block/string"];
-      const indent = '  '.repeat(currentIndent);
-      lines.push(`${indent}- ${content}`);
-    }
+    const node = {
+      content: blockInfo[":block/string"] || "",
+      children: []
+    };
 
     // Check if this block is a target (selected descendant)
     const isTarget = targetUids.has(parentUid);
@@ -209,8 +207,10 @@ const buildPathToDescendants = (parentUid, targetUids, currentIndent, descendant
         sortedChildren.forEach(child => {
           const childUid = child[":block/uid"];
           if (childUid) {
-            const childLines = getBlockChildren(childUid, currentIndent + 1);
-            lines.push(...childLines);
+            const childNode = getBlockTree(childUid);
+            if (childNode) {
+              node.children.push(childNode);
+            }
           }
         });
       }
@@ -226,29 +226,65 @@ const buildPathToDescendants = (parentUid, targetUids, currentIndent, descendant
         sortedChildren.forEach(child => {
           const childUid = child[":block/uid"];
           if (childUid) {
-            // Check if this child or its descendants contain any targets (using cached descendants)
+            // Check if this child or its descendants contain any targets
             const childDescendants = getAllDescendantUids(childUid);
             const hasTargetInBranch = targetUids.has(childUid) ||
-                                     childDescendants.some(desc => targetUids.has(desc));
-
-            if (DEBUG) {
-              console.log(`Checking child ${childUid}: hasTargetInBranch=${hasTargetInBranch}, isTarget=${targetUids.has(childUid)}, descendantsWithTargets=${childDescendants.filter(d => targetUids.has(d)).length}`);
-            }
+              childDescendants.some(desc => targetUids.has(desc));
 
             if (hasTargetInBranch) {
               // Recursively build path through this child
-              const childLines = buildPathToDescendants(childUid, targetUids, currentIndent + 1, descendantsMap);
-              lines.push(...childLines);
+              const childNode = buildPathTree(childUid, targetUids);
+              if (childNode) {
+                node.children.push(childNode);
+              }
             }
           }
         });
       }
     }
+
+    return node;
   } catch (err) {
-    console.error("Error in buildPathToDescendants:", err);
+    console.error("Error in buildPathTree:", err);
+    return null;
   }
+};
+
+// Convert tree to Markdown text
+const treeToMarkdown = (nodes, indentLevel = 0) => {
+  let lines = [];
+  const indent = '  '.repeat(indentLevel);
+
+  nodes.forEach(node => {
+    lines.push(`${indent}- ${node.content}`);
+    if (node.children && node.children.length > 0) {
+      lines.push(...treeToMarkdown(node.children, indentLevel + 1));
+    }
+  });
 
   return lines;
+};
+
+// Convert tree to HTML
+const treeToHTML = (nodes) => {
+  if (!nodes || nodes.length === 0) return '';
+
+  let html = '<ul>';
+  nodes.forEach(node => {
+    // Convert Roam formatting to HTML (basic)
+    let content = node.content
+      .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+      .replace(/\_\_(.*?)\_\_/g, '<i>$1</i>')
+      .replace(/\^\^(.*?)\^\^/g, '<mark>$1</mark>');
+
+    html += `<li>${content}`;
+    if (node.children && node.children.length > 0) {
+      html += treeToHTML(node.children);
+    }
+    html += '</li>';
+  });
+  html += '</ul>';
+  return html;
 };
 
 const copyVisibleBlocks = (event) => {
@@ -282,10 +318,10 @@ const copyVisibleBlocks = (event) => {
       );
     });
 
-    let allLines = [];
+    let allNodes = [];
 
     // Process each top-level block
-    const processContainer = (container, baseIndent) => {
+    const processContainer = (container) => {
       const blockUid = getBlockUidFromElement(container);
       if (!blockUid) return;
 
@@ -306,47 +342,64 @@ const copyVisibleBlocks = (event) => {
         }
 
         const targetUidsSet = new Set(leafTargets);
-        const pathLines = buildPathToDescendants(blockUid, targetUidsSet, baseIndent);
-        allLines.push(...pathLines);
+        const node = buildPathTree(blockUid, targetUidsSet);
+        if (node) allNodes.push(node);
       } else {
         // No selected descendants - copy entire block with ALL children
         if (DEBUG) console.log(`Block ${blockUid} has no selected descendants - copying all children`);
-        const blockLines = getBlockChildren(blockUid, baseIndent);
-        allLines.push(...blockLines);
+        const node = getBlockTree(blockUid);
+        if (node) allNodes.push(node);
       }
     };
 
-    // Calculate base indentation and process each top-level container
+    // Process each top-level container
     topLevelContainers.forEach((container) => {
-      let baseIndentLevel = 0;
-      let currentElement = container;
-      while (currentElement) {
-        if (currentElement.classList && currentElement.classList.contains('rm-block__children')) {
-          baseIndentLevel++;
-        }
-        currentElement = currentElement.parentElement?.closest('.rm-block__children');
-      }
-
-      processContainer(container, Math.max(0, baseIndentLevel - 1));
+      processContainer(container);
     });
 
-    const finalContent = allLines.join('\n');
+    // Convert to Markdown (Text)
+    const markdownLines = treeToMarkdown(allNodes);
+    const textContent = markdownLines.join('\n');
 
-    if (finalContent) {
+    // Convert to HTML
+    const htmlContent = treeToHTML(allNodes);
+
+    if (textContent) {
       // Check if clipboard API is available
-      if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
+      if (!navigator.clipboard || typeof navigator.clipboard.write !== 'function') {
+        // Fallback to writeText if write() is not available (older browsers)
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(textContent)
+            .then(() => showNotification('✓ Copied (Text only)', '#137CBD'))
+            .catch(err => {
+              console.error("Failed to copy:", err);
+              showNotification('✗ Copy failed', '#DC143C');
+            });
+          return;
+        }
         console.error("Clipboard API is not available");
         showNotification('✗ Error: Clipboard not available', '#DC143C');
         return;
       }
 
-      navigator.clipboard.writeText(finalContent)
+      // Write both formats to clipboard
+      const textBlob = new Blob([textContent], { type: 'text/plain' });
+      const htmlBlob = new Blob([htmlContent], { type: 'text/html' });
+
+      const clipboardItem = new ClipboardItem({
+        'text/plain': textBlob,
+        'text/html': htmlBlob
+      });
+
+      navigator.clipboard.write([clipboardItem])
         .then(() => {
-          showNotification('✓ Copied', '#137CBD');
+          showNotification('✓ Copied (Text + HTML)', '#137CBD');
         })
         .catch((err) => {
           console.error("Failed to copy to clipboard:", err);
-          showNotification('✗ Copy failed', '#DC143C');
+          // Fallback to text only if rich copy fails
+          navigator.clipboard.writeText(textContent)
+            .then(() => showNotification('✓ Copied (Text only)', '#137CBD'));
         });
     }
   } finally {
@@ -392,12 +445,37 @@ const initExtension = () => {
   document.removeEventListener('keydown', handleKeyDown);
   // Add the event listener
   document.addEventListener('keydown', handleKeyDown);
+
+  // Register command in Roam Command Palette
+  if (window.roamAlphaAPI && window.roamAlphaAPI.ui && window.roamAlphaAPI.ui.commandPalette) {
+    window.roamAlphaAPI.ui.commandPalette.addCommand({
+      label: "Smart Copy Filtered Blocks (Roam Filter)",
+      callback: () => {
+        // Create a fake event object since the function expects one
+        const fakeEvent = {
+          preventDefault: () => { },
+          stopPropagation: () => { }
+        };
+        copyVisibleBlocks(fakeEvent);
+      },
+      "disable-hotkey": false // Allow users to set their own hotkey
+    });
+  }
+
   console.log("Roam Filter Copy extension loaded");
 };
 
 // Cleanup function to remove event listener
 const cleanupExtension = () => {
   document.removeEventListener('keydown', handleKeyDown);
+
+  // Remove command from palette
+  if (window.roamAlphaAPI && window.roamAlphaAPI.ui && window.roamAlphaAPI.ui.commandPalette) {
+    window.roamAlphaAPI.ui.commandPalette.removeCommand({
+      label: "Smart Copy Filtered Blocks (Roam Filter)"
+    });
+  }
+
   console.log("Roam Filter Copy extension unloaded");
 };
 

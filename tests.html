@@ -260,47 +260,7 @@
       assert(result === false, 'Unrelated elements should not be descendants');
     });
 
-    // Test 8: isDirectChild with null parameters
-    runner.test('isDirectChild - should handle null parameters', () => {
-      const result = isDirectChild(null, null);
-      assert(result === false, 'Should return false for null parameters');
-    });
 
-    // Test 9: isDirectChild with direct child
-    runner.test('isDirectChild - should detect direct child relationship', () => {
-      const parent = document.createElement('div');
-      parent.classList.add('roam-block-container');
-
-      const wrapper = document.createElement('div');
-      const child = document.createElement('div');
-      child.classList.add('roam-block-container');
-
-      parent.appendChild(wrapper);
-      wrapper.appendChild(child);
-
-      const result = isDirectChild(child, parent);
-      assert(result === true, 'Should detect direct child');
-    });
-
-    // Test 10: isDirectChild with grandchild
-    runner.test('isDirectChild - should reject grandchild', () => {
-      const parent = document.createElement('div');
-      parent.classList.add('roam-block-container');
-
-      const child = document.createElement('div');
-      child.classList.add('roam-block-container');
-
-      const grandchildWrapper = document.createElement('div');
-      const grandchild = document.createElement('div');
-      grandchild.classList.add('roam-block-container');
-
-      parent.appendChild(child);
-      child.appendChild(grandchildWrapper);
-      grandchildWrapper.appendChild(grandchild);
-
-      const result = isDirectChild(grandchild, parent);
-      assert(result === false, 'Grandchild should not be direct child');
-    });
 
     // Test 11: getBlockChildren with valid UID
     runner.test('getBlockChildren - should retrieve block and children', () => {
@@ -315,25 +275,9 @@
       assert(lines.length === 0, 'Should return empty array for empty UID');
     });
 
-    // Test 13: hasSelectedDescendants
-    runner.test('hasSelectedDescendants - should detect descendants in array', () => {
-      const parent = document.createElement('div');
-      const child = document.createElement('div');
-      const grandchild = document.createElement('div');
 
-      parent.appendChild(child);
-      child.appendChild(grandchild);
 
-      const containers = [parent, child, grandchild];
-      const result = hasSelectedDescendants(parent, containers);
-      assert(result === true, 'Should detect descendants');
-    });
 
-    // Test 14: getBlockTextOnly with null
-    runner.test('getBlockTextOnly - should handle null container', () => {
-      const result = getBlockTextOnly(null, 0);
-      assert(result === null, 'Should return null for null container');
-    });
 
     // Test 15: showNotification
     runner.test('showNotification - should create notification element', () => {
