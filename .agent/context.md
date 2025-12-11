@@ -1,27 +1,23 @@
-# Roam Filter Export
+# AI Context - roamFilter
 
 ## Propósito
-Plugin para exportar contenido filtrado por tags de Roam Research usando queries Datalog.
-Resuelve el problema de que el filtro visual no funciona cuando los bloques están colapsados.
+Plugin de Roam Research para exportar contenido filtrado usando queries Datalog.
+Funciona incluso con bloques colapsados.
 
-## Arquitectura
-```
-src/
-├── core/
-│   ├── queries.js      # Queries Datalog para buscar bloques
-│   ├── tree-builder.js # Construye árboles con ancestros/descendientes
-│   └── exporter.js     # Genera Markdown y descarga archivo
-```
+## Características Actuales (v2.3.2)
+- **Alt+Shift+C**: Copia bloques seleccionados visualmente (azules)
+- **Export Filtered Content**: Busca por tag en página actual → descarga `.md`
+- **Copy Filtered Content**: Busca por tag en página actual → copia al portapapeles
+- Soporta formatos: `#tag`, `[[tag]]`, `#[[tag]]`
+- Filtra por página actual (no todo el grafo)
+- Preserva ordenamiento de bloques
 
-## Entry Point
-`extension.js` - Registra comando en Command Palette de Roam
+## Stack Técnico
+- Roam Alpha API (Datalog queries, pull)
+- JavaScript vanilla (sin módulos ES)
+- Clipboard API (text/plain + text/html)
 
 ## Decisiones de Diseño
-- Datalog en lugar de DOM (funciona con bloques colapsados)
-- Exporta a archivo Markdown (escala mejor que portapapeles)
-- Prompt simple para ingresar tag a buscar
-
-## API de Roam Usada
-- `window.roamAlphaAPI.data.q()` - Queries Datalog
-- `window.roamAlphaAPI.pull()` - Obtener datos estructurados
-- `window.roamAlphaAPI.ui.commandPalette.addCommand()` - Registrar comandos
+- Todo inlineado en `extension.js` (Roam no soporta módulos)
+- Recursión manual para obtener descendientes (no `...` en pull)
+- Versionado con fecha/hora en header

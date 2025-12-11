@@ -1,6 +1,6 @@
 // Roam Filter Export - Smart Export for Filtered Blocks
-// Version: 2.2.0
-// Date: 2025-12-11 17:04
+// Version: 2.4.0
+// Date: 2025-12-11 17:32
 //
 // Created by Camilo Luvino
 // https://github.com/camiloluvino/roamFilter
@@ -19,24 +19,70 @@ const isRoamAPIAvailable = () => {
     typeof window.roamAlphaAPI.data?.q === 'function';
 };
 
+// Get the UID of the currently open page
+const getCurrentPageUid = () => {
+  // Try to get from URL hash (works for both page and daily notes)
+  const match = window.location.hash.match(/\/page\/(.+?)(?:\/|$)/);
+  if (match) {
+    return match[1];
+  }
+
+  // For daily notes page, get from URL with date format
+  const dailyMatch = window.location.hash.match(/\/(\d{2}-\d{2}-\d{4})(?:\/|$)/);
+  if (dailyMatch) {
+    // Convert date to Roam's daily page title format
+    const dateStr = dailyMatch[1];
+    const [month, day, year] = dateStr.split('-');
+    const date = new Date(year, month - 1, day);
+    const options = { month: 'long', day: 'numeric', year: 'numeric' };
+    const roamDateTitle = date.toLocaleDateString('en-US', options);
+
+    // Get the page UID for this date title
+    const result = window.roamAlphaAPI.data.q(`
+      [:find ?uid .
+       :where
+       [?page :node/title "${roamDateTitle}"]
+       [?page :block/uid ?uid]]
+    `);
+    return result || null;
+  }
+
+  return null;
+};
+
 const findBlocksByTag = (tagName) => {
   if (!isRoamAPIAvailable()) {
     console.error("Roam API is not available");
     return [];
   }
 
+  const pageUid = getCurrentPageUid();
+  if (!pageUid) {
+    console.error("Could not determine current page UID");
+    return [];
+  }
+
+  if (DEBUG) console.log(`Searching for #${tagName} in page ${pageUid}`);
+
   try {
+    // Find blocks that reference the tag AND belong to the current page
+    // :block/page is the page entity where the block lives
     const results = window.roamAlphaAPI.data.q(`
       [:find (pull ?block [:block/uid :block/string 
                            {:block/parents [:block/uid :block/string :block/order]}])
        :where
        [?tag :node/title "${tagName}"]
-       [?block :block/refs ?tag]]
+       [?block :block/refs ?tag]
+       [?block :block/page ?page]
+       [?page :block/uid "${pageUid}"]]
     `);
 
     if (!results || results.length === 0) {
+      if (DEBUG) console.log(`No blocks found with #${tagName} in page ${pageUid}`);
       return [];
     }
+
+    if (DEBUG) console.log(`Found ${results.length} blocks with #${tagName} in current page`);
 
     return results.map(r => r[0]).filter(Boolean);
   } catch (err) {
@@ -355,6 +401,26 @@ const generateHeader = (tagName, blockCount) => {
 // MAIN EXTENSION LOGIC
 // ============================================
 
+// Clean user input to extract just the page/tag name
+// Supports: #tag, [[tag]], #[[tag]], or just "tag"
+const cleanTagInput = (input) => {
+  if (!input) return null;
+
+  let cleaned = input.trim();
+
+  // Remove # prefix
+  if (cleaned.startsWith('#')) {
+    cleaned = cleaned.substring(1);
+  }
+
+  // Remove [[ prefix and ]] suffix
+  if (cleaned.startsWith('[[') && cleaned.endsWith(']]')) {
+    cleaned = cleaned.substring(2, cleaned.length - 2);
+  }
+
+  return cleaned.trim() || null;
+};
+
 const showNotification = (message, backgroundColor) => {
   try {
     const notification = document.createElement('div');
@@ -475,10 +541,17 @@ const promptForTag = () => {
 const exportFilteredContent = async () => {
   try {
     // Step 1: Get tag from user
-    const tagName = await promptForTag();
+    const rawInput = await promptForTag();
 
-    if (!tagName) {
+    if (!rawInput) {
       return; // User cancelled
+    }
+
+    // Clean input to support #tag, [[tag]], #[[tag]] formats
+    const tagName = cleanTagInput(rawInput);
+    if (!tagName) {
+      showNotification('❌ Invalid tag name', '#DC143C');
+      return;
     }
 
     showNotification(`🔍 Searching for #${tagName}...`, '#137CBD');
@@ -530,10 +603,17 @@ const exportFilteredContent = async () => {
 const copyFilteredContent = async () => {
   try {
     // Step 1: Get tag from user
-    const tagName = await promptForTag();
+    const rawInput = await promptForTag();
 
-    if (!tagName) {
+    if (!rawInput) {
       return; // User cancelled
+    }
+
+    // Clean input to support #tag, [[tag]], #[[tag]] formats
+    const tagName = cleanTagInput(rawInput);
+    if (!tagName) {
+      showNotification('❌ Invalid tag name', '#DC143C');
+      return;
     }
 
     showNotification(`🔍 Searching for #${tagName}...`, '#137CBD');

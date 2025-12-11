@@ -5,51 +5,55 @@ A Roam Research plugin that exports filtered content using Datalog queries. Work
 ## Features
 
 - **Query-Based Export**: Uses Datalog to find blocks, not DOM traversal
+- **Current Page Scope**: Searches only within the currently open page
 - **Works with Collapsed Blocks**: Finds content regardless of UI state
 - **Complete Hierarchy**: Exports ancestral context + all descendants
 - **Smart Filtering**: Only exports branches containing the target tag
-- **Two Output Options**:
-  - **Export to File**: Downloads as Markdown file (for large content)
-  - **Copy to Clipboard**: Copies as Text + HTML (for quick paste)
+- **Flexible Input**: Supports `#tag`, `[[tag]]`, and `#[[tag]]` formats
+
+## Commands
+
+| Command | Activation | Description |
+|---------|------------|-------------|
+| **Smart Copy Selected Blocks** | `Alt+Shift+C` | Copies visually selected (blue) blocks with smart path building |
+| **Export Filtered Content** | Command Palette | Searches by tag in current page → downloads as `.md` file |
+| **Copy Filtered Content** | Command Palette | Searches by tag in current page → copies to clipboard |
 
 ## How It Works
 
-### Export to File
-1. Open Command Palette (`Cmd+P` or `Ctrl+P`)
-2. Search for "Export Filtered Content"
-3. Enter the tag name (without #)
-4. A Markdown file downloads automatically
+### Quick Copy (Visual Selection)
+1. Select blocks in Roam (they turn blue)
+2. Press `Alt+Shift+C`
+3. Content is copied to clipboard (Text + HTML)
 
-### Copy to Clipboard
-1. Open Command Palette (`Cmd+P` or `Ctrl+P`)
-2. Search for "Copy Filtered Content"
-3. Enter the tag name (without #)
-4. Content is copied to clipboard (Text + HTML)
-  - Conversación 3 #resumen
-    - Resumen ejecutivo
-      - Punto clave 2 #filtrarEsto
-        - Justificación teórica
-          - ...
-```
+### Export by Tag
+1. Navigate to the page you want to export from
+2. Open Command Palette (`Cmd+P` or `Ctrl+P`)
+3. Search for "Export Filtered Content" or "Copy Filtered Content"
+4. Enter the tag name (any format: `tag`, `#tag`, `[[tag]]`, `#[[tag]]`)
+5. Content is exported/copied
 
-Only branches containing `#filtrarEsto` are exported, with full context and descendants.
+## Example
+
+**Searching for `#filtrarEsto` in `paginaPruebaFiltrado`:**
+
+Only branches containing `#filtrarEsto` are exported, with:
+- Full ancestral context (path from page root)
+- All descendants of tagged blocks
+- Correct block ordering
 
 ## Installation
 
 ### For personal use (roam/js):
-
 1. Go to `[[roam/js]]` page
 2. Create a `{{[[roam/js]]}}` block
 3. Paste the code from `extension.js` in a code block underneath
 4. Refresh the page
 
-### For Roam Depot:
-
-This extension will be submitted to Roam Depot for easier installation.
-
 ## Technical Details
 
 - Uses `roamAlphaAPI.data.q()` for Datalog queries
+- Filters by current page using `:block/page`
 - Recursively fetches descendants with `roamAlphaAPI.pull()`
 - Builds merged trees to avoid duplication
 - Exports to Markdown format
