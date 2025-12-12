@@ -1,6 +1,6 @@
 // Roam Filter Export - Smart Export for Filtered Blocks
-// Version: 2.4.0
-// Date: 2025-12-11 17:32
+// Version: 2.5.1
+// Date: 2025-12-12
 //
 // Created by Camilo Luvino
 // https://github.com/camiloluvino/roamFilter
@@ -67,8 +67,9 @@ const findBlocksByTag = (tagName) => {
   try {
     // Find blocks that reference the tag AND belong to the current page
     // :block/page is the page entity where the block lives
+    // Include :block/order to maintain correct sorting
     const results = window.roamAlphaAPI.data.q(`
-      [:find (pull ?block [:block/uid :block/string 
+      [:find (pull ?block [:block/uid :block/string :block/order
                            {:block/parents [:block/uid :block/string :block/order]}])
        :where
        [?tag :node/title "${tagName}"]
@@ -217,18 +218,22 @@ const buildExportTree = (targetBlocks) => {
     }
 
     // Add the target block itself
+    // Get the block's order from the query result
+    const blockOrder = block.order || block[":block/order"] || 0;
+
     if (!nodeMap.has(uid)) {
       nodeMap.set(uid, {
         uid,
         content,
         children: [],
-        order: 0, // Default order for target blocks
+        order: blockOrder,
         isTarget: true
       });
     } else {
       // Update content if already exists (might have been added as parent reference)
       const existingNode = nodeMap.get(uid);
       existingNode.isTarget = true;
+      existingNode.order = blockOrder; // Update order
       if (!existingNode.content && content) {
         existingNode.content = content;
       }
@@ -248,6 +253,18 @@ const buildExportTree = (targetBlocks) => {
         const parentUid = parent.uid || parent[":block/uid"];
         const parentContent = parent.string || parent[":block/string"] || parent.title || parent[":node/title"] || "";
         const parentOrder = parent.order || parent[":block/order"] || 0;
+
+        // Skip parents with empty content - connect child directly to grandparent
+        if (!parentContent || parentContent.trim() === "") {
+          if (DEBUG) {
+            console.log(`  Skipping empty parent: uid=${parentUid}`);
+          }
+          // If this is the last parent (root) and it's empty, mark child as root
+          if (i === sortedParents.length - 1) {
+            rootUids.add(childUid);
+          }
+          continue;
+        }
 
         if (DEBUG && i === 0) {
           console.log(`  First parent: uid=${parentUid}, content="${parentContent}", order=${parentOrder}`);
@@ -315,17 +332,89 @@ const buildExportTree = (targetBlocks) => {
     }
   };
 
+  // Calculate global order path for each root by tracing back through ancestors
+  // This creates a comparable path like "0.3.2" representing the position at each level
+  const calculateGlobalOrderPath = (rootUid) => {
+    // Find the target block that led to this root
+    for (const block of targetBlocks) {
+      const uid = block.uid || block[":block/uid"];
+      const parents = block.parents || block[":block/parents"] || [];
+
+      // Check if this block's ancestry includes the root
+      if (parents.length === 0 && uid === rootUid) {
+        // This target block is itself a root
+        const blockOrder = block.order || block[":block/order"] || 0;
+        return [blockOrder];
+      }
+
+      // Check if rootUid is in the parents chain
+      let foundInParents = false;
+      let rootIndex = -1;
+      for (let i = 0; i < parents.length; i++) {
+        const parentUid = parents[i].uid || parents[i][":block/uid"];
+        if (parentUid === rootUid) {
+          foundInParents = true;
+          rootIndex = i;
+          break;
+        }
+      }
+
+      if (foundInParents) {
+        // Build order path from root (or page) down to this block
+        const orderPath = [];
+
+        // Add orders from the root's position down to the target block
+        for (let i = rootIndex; i >= 0; i--) {
+          const parent = parents[i];
+          const parentOrder = parent.order || parent[":block/order"] || 0;
+          orderPath.push(parentOrder);
+        }
+
+        // Add the target block's own order
+        const blockOrder = block.order || block[":block/order"] || 0;
+        orderPath.push(blockOrder);
+
+        return orderPath;
+      }
+    }
+
+    // Fallback: return just the node's own order
+    const node = nodeMap.get(rootUid);
+    return [node?.order || 0];
+  };
+
+  // Compare two order paths lexicographically
+  const compareOrderPaths = (pathA, pathB) => {
+    const maxLen = Math.max(pathA.length, pathB.length);
+    for (let i = 0; i < maxLen; i++) {
+      const a = pathA[i] ?? 0;
+      const b = pathB[i] ?? 0;
+      if (a !== b) {
+        return a - b;
+      }
+    }
+    return 0;
+  };
+
   const roots = [];
   for (const uid of rootUids) {
     const node = nodeMap.get(uid);
     if (node) {
       sortChildren(node);
+      node.globalOrderPath = calculateGlobalOrderPath(uid);
       roots.push(node);
     }
   }
 
+  // Sort roots by their global order path
+  roots.sort((a, b) => compareOrderPaths(a.globalOrderPath || [0], b.globalOrderPath || [0]));
+
   if (DEBUG) {
-    console.log("Final roots:", JSON.stringify(roots, null, 2));
+    console.log("Final roots (sorted by global order):", JSON.stringify(roots.map(r => ({
+      uid: r.uid,
+      content: r.content?.substring(0, 50),
+      globalOrderPath: r.globalOrderPath
+    })), null, 2));
   }
 
   return roots;
