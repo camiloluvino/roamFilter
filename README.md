@@ -1,4 +1,4 @@
-# Roam Filter Export - Smart Export for Filtered Blocks
+# Roam Export Filter - Smart Export for Filtered Blocks
 
 A Roam Research plugin that exports filtered content using Datalog queries. Works even when blocks are collapsed.
 
@@ -44,7 +44,29 @@ Only branches containing `#filtrarEsto` are exported, with:
 
 ## Installation
 
-### For personal use (roam/js):
+### Auto-Update via CDN (Recommended)
+
+Use this method to automatically receive updates across all your Roam graphs:
+
+1. Go to `[[roam/js]]` page in each graph
+2. Create a `{{[[roam/js]]}}` block
+3. Add a JavaScript code block with:
+
+```javascript
+var s = document.createElement('script');
+s.src = 'https://camiloluvino.github.io/roamFilter/roam-filter.js';
+s.type = 'text/javascript';
+document.head.appendChild(s);
+```
+
+4. Refresh the page
+
+> **Benefit**: When you update the plugin, all your graphs will automatically get the latest version.
+
+---
+
+### Manual Installation (roam/js):
+
 1. Go to `[[roam/js]]` page
 2. Create a `{{[[roam/js]]}}` block
 3. Paste the code from `extension.js` in a code block underneath
@@ -62,7 +84,7 @@ Only branches containing `#filtrarEsto` are exported, with:
 
 Run in browser console:
 ```javascript
-window.roamFilterExportCleanup();
+window.roamExportFilterCleanup();
 ```
 
 ## License
