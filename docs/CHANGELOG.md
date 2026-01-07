@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.8.1] - 2026-01-07 02:42
+
+### Changed
+- **Favorite tags instead of dynamic detection**: Tag chips now show a configurable `FAVORITE_TAGS` list instead of detecting all tags in the page (which often included noise from copy/paste)
+- Edit the `FAVORITE_TAGS` constant near line 412 to customize your preferred tags
+
+---
+
 ## [2.8.0] - 2026-01-07 02:32
 
 ### Added

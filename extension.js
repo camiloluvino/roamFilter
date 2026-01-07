@@ -1,6 +1,6 @@
 // Roam Filter Export - Smart Export for Filtered Blocks
-// Version: 2.8.0
-// Date: 2026-01-07 02:32
+// Version: 2.8.1
+// Date: 2026-01-07 02:42
 //
 // Created by Camilo Luvino
 // https://github.com/camiloluvino/roamExportFilter
@@ -242,30 +242,6 @@ const getRootBlocks = (pageUid) => {
   }
 };
 
-// Get unique tags referenced in a page (for tag selector UI)
-const getPageTags = (pageUid) => {
-  if (!isRoamAPIAvailable() || !pageUid) return [];
-
-  try {
-    const results = window.roamAlphaAPI.data.q(`
-      [:find ?title
-       :where
-       [?page :block/uid "${pageUid}"]
-       [?block :block/page ?page]
-       [?block :block/refs ?ref]
-       [?ref :node/title ?title]]
-    `);
-
-    if (!results || results.length === 0) return [];
-
-    // Return unique sorted tags, limit to 15 to avoid UI overload
-    return [...new Set(results.flat())].sort().slice(0, 15);
-  } catch (err) {
-    console.error("Error in getPageTags:", err);
-    return [];
-  }
-};
-
 // Count how many root blocks would match a given tag filter (for preview)
 const countMatchingRoots = (rootBlocks, tagName) => {
   if (!tagName || !rootBlocks || rootBlocks.length === 0) {
@@ -408,6 +384,17 @@ const generateRootFilename = (blockContent) => {
 
 // --- tree-builder.js ---
 const DEBUG = true; // Set to false in production
+
+// Favorite tags for quick filter selection in Export by Root Blocks modal
+// Edit this list to customize your frequently used tags
+const FAVORITE_TAGS = [
+  'textoÍntegro',
+  'Gemini/Pro/3.0/resumen',
+  'Gemini/Pro/3.0/respuestas',
+  'Claude/Sonnet/4.5/resumen',
+  'Claude/Sonnet/4.5/respuestas',
+  'Claude/Opus/4.5/respuestas',
+];
 
 
 const buildExportTree = (targetBlocks) => {
@@ -976,12 +963,9 @@ const copyFilteredContent = async () => {
 // EXPORT BY ROOT BLOCKS
 // ============================================
 
-// Prompt for root export options (with toggle, preview, and tags)
+// Prompt for root export options (with toggle, preview, and favorite tags)
 const promptForRootExport = (pageName, rootCount, rootBlocks, pageUid) => {
   return new Promise((resolve) => {
-    // Get tags for this page
-    const pageTags = getPageTags(pageUid);
-
     // Create modal overlay
     const overlay = document.createElement('div');
     overlay.style.cssText = `
@@ -997,12 +981,12 @@ const promptForRootExport = (pageName, rootCount, rootBlocks, pageUid) => {
       justify-content: center;
     `;
 
-    // Build tags HTML if any exist
-    const tagsHtml = pageTags.length > 0 ? `
+    // Build favorite tags HTML
+    const tagsHtml = FAVORITE_TAGS.length > 0 ? `
       <div style="margin-bottom: 12px;">
-        <div style="font-size: 12px; color: #888; margin-bottom: 6px;">Tags in this page (click to use):</div>
+        <div style="font-size: 12px; color: #888; margin-bottom: 6px;">Favorite tags (click to use):</div>
         <div id="roam-root-tags" style="display: flex; flex-wrap: wrap; gap: 4px;">
-          ${pageTags.map(tag => `
+          ${FAVORITE_TAGS.map(tag => `
             <span class="roam-tag-chip" data-tag="${tag}" 
               style="padding: 2px 8px; font-size: 12px; background: #e3f2fd; color: #1976d2; 
                      border-radius: 12px; cursor: pointer; transition: background 0.2s;">
