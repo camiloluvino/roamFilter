@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.8.0] - 2026-01-07 02:32
+
+### Added
+- **Order toggle in Export by Root Blocks**: Checkbox to control whether `01_` = bottom block (inverted, default) or top block
+- **Live preview count**: Shows how many files will be exported as you type a filter tag (with 300ms debounce)
+- **Clickable tag chips**: Displays up to 15 tags found in the page; click to use as filter
+
+### Changed
+- Export button now shows dynamic count: "Export X files"
+- Modal is slightly wider to accommodate new UI elements
+
+---
+
 ## [2.7.2] - 2026-01-07
 
 ### Changed

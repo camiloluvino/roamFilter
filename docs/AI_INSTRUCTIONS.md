@@ -157,12 +157,14 @@ Línea 352. Habilita logs extensivos en consola. En producción debería ser `fa
    // Date: YYYY-MM-DD HH:MM
    ```
 
-2. **Cuándo incrementar**:
+2. **OBLIGATORIO**: La fecha **siempre debe incluir la hora** (formato `HH:MM`). Esto permite distinguir múltiples versiones del mismo día.
+
+3. **Cuándo incrementar**:
    - MAJOR (X): Cambios breaking o restructuración significativa
    - MINOR (Y): Nueva funcionalidad
    - PATCH (Z): Corrección de bugs
 
-3. **Actualizar también**: `docs/CHANGELOG.md` con los cambios realizados.
+4. **Actualizar también**: `docs/CHANGELOG.md` con los cambios realizados.
 
 ### Convenciones de nombrado
 

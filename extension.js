@@ -1,6 +1,6 @@
 // Roam Filter Export - Smart Export for Filtered Blocks
-// Version: 2.7.2
-// Date: 2026-01-07
+// Version: 2.8.0
+// Date: 2026-01-07 02:32
 //
 // Created by Camilo Luvino
 // https://github.com/camiloluvino/roamExportFilter
@@ -239,6 +239,64 @@ const getRootBlocks = (pageUid) => {
   } catch (err) {
     console.error("Error in getRootBlocks:", err);
     return [];
+  }
+};
+
+// Get unique tags referenced in a page (for tag selector UI)
+const getPageTags = (pageUid) => {
+  if (!isRoamAPIAvailable() || !pageUid) return [];
+
+  try {
+    const results = window.roamAlphaAPI.data.q(`
+      [:find ?title
+       :where
+       [?page :block/uid "${pageUid}"]
+       [?block :block/page ?page]
+       [?block :block/refs ?ref]
+       [?ref :node/title ?title]]
+    `);
+
+    if (!results || results.length === 0) return [];
+
+    // Return unique sorted tags, limit to 15 to avoid UI overload
+    return [...new Set(results.flat())].sort().slice(0, 15);
+  } catch (err) {
+    console.error("Error in getPageTags:", err);
+    return [];
+  }
+};
+
+// Count how many root blocks would match a given tag filter (for preview)
+const countMatchingRoots = (rootBlocks, tagName) => {
+  if (!tagName || !rootBlocks || rootBlocks.length === 0) {
+    return rootBlocks ? rootBlocks.length : 0;
+  }
+
+  try {
+    let count = 0;
+    for (const root of rootBlocks) {
+      const rootUid = root[':block/uid'] || root.uid;
+      if (!rootUid) continue;
+
+      // Quick check: does any block under this root reference the tag?
+      const result = window.roamAlphaAPI.data.q(`
+        [:find ?block .
+         :where
+         [?tag :node/title "${tagName}"]
+         [?block :block/refs ?tag]
+         [?root :block/uid "${rootUid}"]
+         (or
+           [?block :block/parents ?root]
+           (and
+             [?block :block/parents ?ancestor]
+             [?ancestor :block/parents ?root]))]
+      `);
+      if (result) count++;
+    }
+    return count;
+  } catch (err) {
+    console.error("Error in countMatchingRoots:", err);
+    return rootBlocks.length;
   }
 };
 
@@ -918,9 +976,12 @@ const copyFilteredContent = async () => {
 // EXPORT BY ROOT BLOCKS
 // ============================================
 
-// Prompt for root export options
-const promptForRootExport = (pageName, rootCount) => {
+// Prompt for root export options (with toggle, preview, and tags)
+const promptForRootExport = (pageName, rootCount, rootBlocks, pageUid) => {
   return new Promise((resolve) => {
+    // Get tags for this page
+    const pageTags = getPageTags(pageUid);
+
     // Create modal overlay
     const overlay = document.createElement('div');
     overlay.style.cssText = `
@@ -936,6 +997,22 @@ const promptForRootExport = (pageName, rootCount) => {
       justify-content: center;
     `;
 
+    // Build tags HTML if any exist
+    const tagsHtml = pageTags.length > 0 ? `
+      <div style="margin-bottom: 12px;">
+        <div style="font-size: 12px; color: #888; margin-bottom: 6px;">Tags in this page (click to use):</div>
+        <div id="roam-root-tags" style="display: flex; flex-wrap: wrap; gap: 4px;">
+          ${pageTags.map(tag => `
+            <span class="roam-tag-chip" data-tag="${tag}" 
+              style="padding: 2px 8px; font-size: 12px; background: #e3f2fd; color: #1976d2; 
+                     border-radius: 12px; cursor: pointer; transition: background 0.2s;">
+              #${tag}
+            </span>
+          `).join('')}
+        </div>
+      </div>
+    ` : '';
+
     // Create modal
     const modal = document.createElement('div');
     modal.style.cssText = `
@@ -943,7 +1020,8 @@ const promptForRootExport = (pageName, rootCount) => {
       padding: 24px;
       border-radius: 8px;
       box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-      min-width: 350px;
+      min-width: 380px;
+      max-width: 450px;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto;
     `;
 
@@ -953,6 +1031,9 @@ const promptForRootExport = (pageName, rootCount) => {
         <div style="font-size: 13px; color: #666;">Page: <strong>${pageName}</strong></div>
         <div style="font-size: 13px; color: #666;">Root blocks found: <strong>${rootCount}</strong></div>
       </div>
+      
+      ${tagsHtml}
+      
       <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #666;">
         Filter by tag (optional):
       </label>
@@ -960,6 +1041,18 @@ const promptForRootExport = (pageName, rootCount) => {
         style="width: 100%; padding: 8px 12px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;"
         placeholder="e.g., textoÍntegro (leave empty for all)"
       />
+      
+      <div id="roam-root-preview" style="margin-top: 8px; font-size: 13px; color: #666; min-height: 20px;">
+        → Will export: <strong>${rootCount}</strong> files
+      </div>
+      
+      <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #eee;">
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #555; cursor: pointer;">
+          <input type="checkbox" id="roam-root-invert" checked style="margin: 0;">
+          Invert order (01 = bottom block in Roam)
+        </label>
+      </div>
+      
       <div style="margin-top: 16px; display: flex; gap: 8px; justify-content: flex-end;">
         <button id="roam-root-cancel" 
           style="padding: 8px 16px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; background: #f5f5f5; cursor: pointer;">
@@ -967,7 +1060,7 @@ const promptForRootExport = (pageName, rootCount) => {
         </button>
         <button id="roam-root-export" 
           style="padding: 8px 16px; font-size: 14px; border: none; border-radius: 4px; background: #28a745; color: white; cursor: pointer;">
-          Export All
+          Export ${rootCount} files
         </button>
       </div>
     `;
@@ -978,22 +1071,59 @@ const promptForRootExport = (pageName, rootCount) => {
     const input = document.getElementById('roam-root-filter-input');
     const cancelBtn = document.getElementById('roam-root-cancel');
     const exportBtn = document.getElementById('roam-root-export');
+    const invertCheckbox = document.getElementById('roam-root-invert');
+    const previewDiv = document.getElementById('roam-root-preview');
+    const tagsContainer = document.getElementById('roam-root-tags');
 
     input.focus();
 
+    // Debounce timer for preview updates
+    let debounceTimer = null;
+
+    const updatePreview = () => {
+      const filterValue = input.value.trim();
+      const cleanedTag = filterValue ? cleanTagInput(filterValue) : null;
+      const matchCount = countMatchingRoots(rootBlocks, cleanedTag);
+
+      previewDiv.innerHTML = cleanedTag
+        ? `→ Will export: <strong>${matchCount}</strong> of ${rootCount} files`
+        : `→ Will export: <strong>${rootCount}</strong> files`;
+
+      exportBtn.textContent = `Export ${matchCount} files`;
+    };
+
+    // Listen for input changes with debounce
+    input.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(updatePreview, 300);
+    });
+
+    // Tag chip click handlers
+    if (tagsContainer) {
+      tagsContainer.addEventListener('click', (e) => {
+        const chip = e.target.closest('.roam-tag-chip');
+        if (chip) {
+          input.value = chip.dataset.tag;
+          updatePreview();
+        }
+      });
+    }
+
     const cleanup = () => {
+      clearTimeout(debounceTimer);
       document.body.removeChild(overlay);
     };
 
     const submit = () => {
       const filterValue = input.value.trim();
+      const invertOrder = invertCheckbox.checked;
       cleanup();
-      resolve({ cancelled: false, filter: filterValue || null });
+      resolve({ cancelled: false, filter: filterValue || null, invertOrder });
     };
 
     cancelBtn.addEventListener('click', () => {
       cleanup();
-      resolve({ cancelled: true, filter: null });
+      resolve({ cancelled: true, filter: null, invertOrder: true });
     });
 
     exportBtn.addEventListener('click', submit);
@@ -1003,7 +1133,7 @@ const promptForRootExport = (pageName, rootCount) => {
         submit();
       } else if (e.key === 'Escape') {
         cleanup();
-        resolve({ cancelled: true, filter: null });
+        resolve({ cancelled: true, filter: null, invertOrder: true });
       }
     });
 
@@ -1011,7 +1141,7 @@ const promptForRootExport = (pageName, rootCount) => {
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay) {
         cleanup();
-        resolve({ cancelled: true, filter: null });
+        resolve({ cancelled: true, filter: null, invertOrder: true });
       }
     });
   });
@@ -1038,14 +1168,14 @@ const exportByRootBlocks = async () => {
       return;
     }
 
-    // Step 3: Show prompt
-    const { cancelled, filter } = await promptForRootExport(pageName, rootBlocks.length);
+    // Step 3: Show prompt (pass rootBlocks and pageUid for preview and tags features)
+    const { cancelled, filter, invertOrder } = await promptForRootExport(pageName, rootBlocks.length, rootBlocks, pageUid);
     if (cancelled) {
       return;
     }
 
     const tagFilter = filter ? cleanTagInput(filter) : null;
-    if (DEBUG) console.log(`Export by Root Blocks - Filter: ${tagFilter || 'none'}`);
+    if (DEBUG) console.log(`Export by Root Blocks - Filter: ${tagFilter || 'none'}, Invert: ${invertOrder}`);
 
     showNotification(`📄 Processing ${rootBlocks.length} root blocks...`, '#137CBD');
 
@@ -1076,8 +1206,9 @@ const exportByRootBlocks = async () => {
       // Generate markdown and filename with order prefix
       const markdown = rootBlockToMarkdown(rootContent, children);
       const baseFilename = generateRootFilename(rootContent);
-      // Pad order number (01, 02, ... 99, 100, etc.) - INVERTED: bottom block in Roam = 01
-      const orderPrefix = String(rootBlocks.length - orderIndex + 1).padStart(2, '0');
+      // Pad order number - invertOrder: bottom block = 01, otherwise top block = 01
+      const orderNum = invertOrder ? (rootBlocks.length - orderIndex + 1) : orderIndex;
+      const orderPrefix = String(orderNum).padStart(2, '0');
       const filename = `${orderPrefix}_${baseFilename}`;
       orderIndex++;
 
