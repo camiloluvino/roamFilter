@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Personal/test exports (add specific files here if needed)
+export_*.md
+
+# Large reference files (optional - uncomment if you don't want these in git)
+# reference/

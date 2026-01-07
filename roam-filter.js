@@ -1,6 +1,6 @@
 // Roam Filter Export - Smart Export for Filtered Blocks
-// Version: 2.7.1
-// Date: 2025-12-20 03:23
+// Version: 2.7.2
+// Date: 2026-01-07
 //
 // Created by Camilo Luvino
 // https://github.com/camiloluvino/roamExportFilter
@@ -1076,8 +1076,8 @@ const exportByRootBlocks = async () => {
       // Generate markdown and filename with order prefix
       const markdown = rootBlockToMarkdown(rootContent, children);
       const baseFilename = generateRootFilename(rootContent);
-      // Pad order number (01, 02, ... 99, 100, etc.)
-      const orderPrefix = String(orderIndex).padStart(2, '0');
+      // Pad order number (01, 02, ... 99, 100, etc.) - INVERTED: bottom block in Roam = 01
+      const orderPrefix = String(rootBlocks.length - orderIndex + 1).padStart(2, '0');
       const filename = `${orderPrefix}_${baseFilename}`;
       orderIndex++;
 

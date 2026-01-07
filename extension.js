@@ -1,12 +1,31 @@
 // Roam Filter Export - Smart Export for Filtered Blocks
-// Version: 2.5.1
-// Date: 2025-12-12
+// Version: 2.7.2
+// Date: 2026-01-07
 //
 // Created by Camilo Luvino
-// https://github.com/camiloluvino/roamFilter
+// https://github.com/camiloluvino/roamExportFilter
 //
 // Exports content filtered by tags using Datalog queries.
 // Works even when blocks are collapsed (unlike DOM-based approaches).
+
+// ============================================
+// JSZIP LOADING (for ZIP exports when >5 files)
+// ============================================
+
+// Load JSZip from CDN if not already loaded
+const loadJSZip = () => {
+  return new Promise((resolve, reject) => {
+    if (window.JSZip) {
+      resolve(window.JSZip);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+    script.onload = () => resolve(window.JSZip);
+    script.onerror = () => reject(new Error('Failed to load JSZip'));
+    document.head.appendChild(script);
+  });
+};
 
 // ============================================
 // INLINE MODULES (Roam doesn't support ES modules)
@@ -191,8 +210,147 @@ const transformBlock = (block) => {
   return node;
 };
 
+// --- export-by-root.js ---
+// Get all root-level blocks (direct children of the page)
+const getRootBlocks = (pageUid) => {
+  if (!isRoamAPIAvailable() || !pageUid) {
+    console.error("getRootBlocks: invalid input or API unavailable");
+    return [];
+  }
+
+  try {
+    // Use pull to get the page's direct children
+    const pageData = window.roamAlphaAPI.pull(
+      '[:block/uid {:block/children [:block/uid :block/string :block/order]}]',
+      [':block/uid', pageUid]
+    );
+
+    if (!pageData || !pageData[':block/children']) {
+      if (DEBUG) console.log(`No root blocks found in page ${pageUid}`);
+      return [];
+    }
+
+    // Sort by order
+    const blocks = pageData[':block/children']
+      .sort((a, b) => (a[':block/order'] || 0) - (b[':block/order'] || 0));
+
+    if (DEBUG) console.log(`Found ${blocks.length} root blocks in page ${pageUid}`);
+    return blocks;
+  } catch (err) {
+    console.error("Error in getRootBlocks:", err);
+    return [];
+  }
+};
+
+// Get filtered children of a root block (or all children if no filter)
+const getFilteredChildren = (rootUid, tagName = null) => {
+  if (!rootUid) return [];
+
+  try {
+    if (!tagName) {
+      // No filter - return complete tree
+      const fullTree = getBlockWithDescendants(rootUid);
+      return fullTree?.children || [];
+    }
+
+    // With filter - find children that contain the tag
+    const results = window.roamAlphaAPI.data.q(`
+      [:find (pull ?block [:block/uid :block/string :block/order
+                           {:block/parents [:block/uid :block/string :block/order]}])
+       :where
+       [?tag :node/title "${tagName}"]
+       [?block :block/refs ?tag]
+       [?block :block/parents ?parent]
+       [?parent :block/uid "${rootUid}"]]
+    `);
+
+    if (!results || results.length === 0) {
+      // Also check for deeper descendants
+      const deepResults = window.roamAlphaAPI.data.q(`
+        [:find (pull ?block [:block/uid :block/string :block/order
+                             {:block/parents [:block/uid :block/string :block/order]}])
+         :where
+         [?tag :node/title "${tagName}"]
+         [?block :block/refs ?tag]
+         [?root :block/uid "${rootUid}"]
+         [?block :block/parents ?ancestor]
+         [?ancestor :block/parents ?root]]
+      `);
+
+      if (!deepResults || deepResults.length === 0) {
+        return [];
+      }
+
+      // For deep matches, get the block with its full subtree
+      return deepResults
+        .map(r => r[0])
+        .filter(Boolean)
+        .map(block => {
+          const uid = block[":block/uid"] || block.uid;
+          const fullTree = getBlockWithDescendants(uid);
+          return fullTree;
+        })
+        .filter(Boolean)
+        .sort((a, b) => (a.order || 0) - (b.order || 0));
+    }
+
+    // For direct children matches, get each with its full subtree
+    return results
+      .map(r => r[0])
+      .filter(Boolean)
+      .map(block => {
+        const uid = block[":block/uid"] || block.uid;
+        const fullTree = getBlockWithDescendants(uid);
+        return fullTree;
+      })
+      .filter(Boolean)
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+  } catch (err) {
+    console.error("Error in getFilteredChildren:", err);
+    return [];
+  }
+};
+
+// Convert root block to markdown with H1 heading
+const rootBlockToMarkdown = (rootContent, childrenTree) => {
+  let markdown = `# ${rootContent}\n\n`;
+
+  if (childrenTree && childrenTree.length > 0) {
+    markdown += treeToMarkdown(childrenTree);
+  }
+
+  return markdown;
+};
+
+// Generate safe filename from block content
+const generateRootFilename = (blockContent) => {
+  if (!blockContent) return "untitled.md";
+
+  // Remove [[]] references but keep the text inside
+  let safe = blockContent.replace(/\[\[([^\]]+)\]\]/g, '$1');
+
+  // Remove # tags
+  safe = safe.replace(/#/g, '');
+
+  // Replace problematic characters
+  safe = safe.replace(/[\/\\:*?"<>|]/g, '_');
+
+  // Replace multiple spaces/underscores with single underscore
+  safe = safe.replace(/[\s_]+/g, '_');
+
+  // Trim and limit length
+  safe = safe.trim().substring(0, 50);
+
+  // Remove trailing underscores
+  safe = safe.replace(/_+$/, '');
+
+  return `${safe || 'untitled'}.md`;
+};
+
 // --- tree-builder.js ---
 const DEBUG = true; // Set to false in production
+
 
 const buildExportTree = (targetBlocks) => {
   if (!targetBlocks || targetBlocks.length === 0) {
@@ -756,6 +914,251 @@ const copyFilteredContent = async () => {
   }
 };
 
+// ============================================
+// EXPORT BY ROOT BLOCKS
+// ============================================
+
+// Prompt for root export options
+const promptForRootExport = (pageName, rootCount) => {
+  return new Promise((resolve) => {
+    // Create modal overlay
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 10001;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    `;
+
+    // Create modal
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+      background: white;
+      padding: 24px;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      min-width: 350px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto;
+    `;
+
+    modal.innerHTML = `
+      <h3 style="margin: 0 0 16px 0; font-size: 16px; color: #333;">Export by Root Blocks</h3>
+      <div style="margin-bottom: 16px; padding: 12px; background: #f5f5f5; border-radius: 4px;">
+        <div style="font-size: 13px; color: #666;">Page: <strong>${pageName}</strong></div>
+        <div style="font-size: 13px; color: #666;">Root blocks found: <strong>${rootCount}</strong></div>
+      </div>
+      <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #666;">
+        Filter by tag (optional):
+      </label>
+      <input type="text" id="roam-root-filter-input" 
+        style="width: 100%; padding: 8px 12px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;"
+        placeholder="e.g., textoÍntegro (leave empty for all)"
+      />
+      <div style="margin-top: 16px; display: flex; gap: 8px; justify-content: flex-end;">
+        <button id="roam-root-cancel" 
+          style="padding: 8px 16px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; background: #f5f5f5; cursor: pointer;">
+          Cancel
+        </button>
+        <button id="roam-root-export" 
+          style="padding: 8px 16px; font-size: 14px; border: none; border-radius: 4px; background: #28a745; color: white; cursor: pointer;">
+          Export All
+        </button>
+      </div>
+    `;
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    const input = document.getElementById('roam-root-filter-input');
+    const cancelBtn = document.getElementById('roam-root-cancel');
+    const exportBtn = document.getElementById('roam-root-export');
+
+    input.focus();
+
+    const cleanup = () => {
+      document.body.removeChild(overlay);
+    };
+
+    const submit = () => {
+      const filterValue = input.value.trim();
+      cleanup();
+      resolve({ cancelled: false, filter: filterValue || null });
+    };
+
+    cancelBtn.addEventListener('click', () => {
+      cleanup();
+      resolve({ cancelled: true, filter: null });
+    });
+
+    exportBtn.addEventListener('click', submit);
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        submit();
+      } else if (e.key === 'Escape') {
+        cleanup();
+        resolve({ cancelled: true, filter: null });
+      }
+    });
+
+    // Close on overlay click
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        cleanup();
+        resolve({ cancelled: true, filter: null });
+      }
+    });
+  });
+};
+
+// Main export by root blocks function
+const exportByRootBlocks = async () => {
+  try {
+    // Step 1: Get current page
+    const pageUid = getCurrentPageUid();
+    if (!pageUid) {
+      showNotification('❌ Could not detect current page', '#DC143C');
+      return;
+    }
+
+    // Get page name
+    const pageInfo = window.roamAlphaAPI.pull('[:node/title :block/string]', [':block/uid', pageUid]);
+    const pageName = pageInfo?.[':node/title'] || pageInfo?.[':block/string'] || 'Unknown Page';
+
+    // Step 2: Get root blocks
+    const rootBlocks = getRootBlocks(pageUid);
+    if (rootBlocks.length === 0) {
+      showNotification('❌ No root blocks found on this page', '#DC143C');
+      return;
+    }
+
+    // Step 3: Show prompt
+    const { cancelled, filter } = await promptForRootExport(pageName, rootBlocks.length);
+    if (cancelled) {
+      return;
+    }
+
+    const tagFilter = filter ? cleanTagInput(filter) : null;
+    if (DEBUG) console.log(`Export by Root Blocks - Filter: ${tagFilter || 'none'}`);
+
+    showNotification(`📄 Processing ${rootBlocks.length} root blocks...`, '#137CBD');
+
+    // Step 4: Process each root block and collect files
+    const filesToExport = [];
+    let skippedCount = 0;
+
+    let orderIndex = 1; // Track order for filename prefix
+    for (let i = 0; i < rootBlocks.length; i++) {
+      const rootBlock = rootBlocks[i];
+      const rootUid = rootBlock[':block/uid'] || rootBlock.uid;
+      const rootContent = rootBlock[':block/string'] || rootBlock.string || '';
+
+      if (!rootUid || !rootContent) {
+        skippedCount++;
+        continue;
+      }
+
+      // Get children (filtered if tag provided)
+      const children = getFilteredChildren(rootUid, tagFilter);
+
+      // Skip if filter is active and no matching children
+      if (tagFilter && children.length === 0) {
+        skippedCount++;
+        continue;
+      }
+
+      // Generate markdown and filename with order prefix
+      const markdown = rootBlockToMarkdown(rootContent, children);
+      const baseFilename = generateRootFilename(rootContent);
+      // Pad order number (01, 02, ... 99, 100, etc.) - INVERTED: bottom block in Roam = 01
+      const orderPrefix = String(rootBlocks.length - orderIndex + 1).padStart(2, '0');
+      const filename = `${orderPrefix}_${baseFilename}`;
+      orderIndex++;
+
+      filesToExport.push({ filename, content: markdown });
+    }
+
+    if (filesToExport.length === 0) {
+      showNotification(`❌ No blocks matched the filter`, '#DC143C');
+      return;
+    }
+
+    // Step 5: Export - ZIP if >5 files, individual downloads otherwise
+    if (filesToExport.length > 5) {
+      // Use ZIP export
+      showNotification(`📦 Creating ZIP with ${filesToExport.length} files...`, '#137CBD');
+
+      try {
+        const JSZip = await loadJSZip();
+        const zip = new JSZip();
+
+        // Add all files to the ZIP
+        for (const file of filesToExport) {
+          zip.file(file.filename, file.content);
+        }
+
+        // Generate ZIP blob
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+
+        // Generate ZIP filename
+        const date = new Date().toISOString().split('T')[0];
+        const safePageName = pageName.replace(/[\/\\:*?"<>|]/g, '_').substring(0, 30);
+        const zipFilename = `export_${safePageName}_${date}.zip`;
+
+        // Download ZIP
+        const url = URL.createObjectURL(zipBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = zipFilename;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        }, 100);
+
+        const filterMsg = tagFilter ? ` (filtered by #${tagFilter})` : '';
+        showNotification(`✓ Exported ${filesToExport.length} files as ZIP${filterMsg}`, '#28a745');
+
+      } catch (zipErr) {
+        console.error('ZIP creation failed:', zipErr);
+        showNotification(`❌ ZIP creation failed: ${zipErr.message}`, '#DC143C');
+      }
+
+    } else {
+      // Individual file downloads (original behavior)
+      let exportedCount = 0;
+
+      for (let i = 0; i < filesToExport.length; i++) {
+        const { filename, content } = filesToExport[i];
+        const success = downloadFile(content, filename);
+        if (success) {
+          exportedCount++;
+        }
+
+        // Small delay between downloads to avoid browser blocking
+        if (i < filesToExport.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
+      }
+
+      const filterMsg = tagFilter ? ` (filtered by #${tagFilter})` : '';
+      showNotification(`✓ Exported ${exportedCount} files${filterMsg}`, '#28a745');
+    }
+
+  } catch (err) {
+    console.error("Error in exportByRootBlocks:", err);
+    showNotification(`❌ Error: ${err.message}`, '#DC143C');
+  }
+};
+
 // Convert tree to HTML for rich pasting
 const treeToHTML = (trees, indentLevel = 0) => {
   if (!trees || trees.length === 0) {
@@ -1121,6 +1524,13 @@ const initExtension = () => {
       },
       "disable-hotkey": false
     });
+
+    // Export by root blocks
+    window.roamAlphaAPI.ui.commandPalette.addCommand({
+      label: "Export by Root Blocks",
+      callback: exportByRootBlocks,
+      "disable-hotkey": false
+    });
   }
 
   console.log("Roam Filter Export extension loaded");
@@ -1133,6 +1543,7 @@ const cleanupExtension = () => {
     window.roamAlphaAPI.ui.commandPalette.removeCommand({ label: "Export Filtered Content" });
     window.roamAlphaAPI.ui.commandPalette.removeCommand({ label: "Copy Filtered Content" });
     window.roamAlphaAPI.ui.commandPalette.removeCommand({ label: "Smart Copy Selected Blocks" });
+    window.roamAlphaAPI.ui.commandPalette.removeCommand({ label: "Export by Root Blocks" });
   }
 
   console.log("Roam Filter Export extension unloaded");
@@ -1140,7 +1551,7 @@ const cleanupExtension = () => {
 
 // Make cleanup available globally
 if (typeof window !== 'undefined') {
-  window.roamFilterExportCleanup = cleanupExtension;
+  window.roamExportFilterCleanup = cleanupExtension;
 }
 
 // Initialize

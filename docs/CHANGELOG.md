@@ -1,3 +1,31 @@
+# Changelog
+
+## [2.7.2] - 2026-01-07
+
+### Changed
+- **Inverted filename order prefix**: Bottom block in Roam now gets prefix `01_`, top block gets highest number. This makes chronological content (oldest at bottom) sort correctly when files are sorted alphabetically.
+
+---
+
+## [2.7.1] - 2025-12-20
+
+### Added
+- **Filename order prefix**: Exported files now include order prefix (01_, 02_, etc.) to maintain page order when sorted alphabetically
+
+---
+
+## [2.7.0] - 2025-12-20
+
+### Added
+- **ZIP export for Export by Root Blocks**: When exporting more than 5 root blocks, files are now bundled into a single ZIP file instead of downloading individually
+- JSZip library integration (loaded from CDN on demand)
+
+### Changed
+- Export by Root Blocks now collects all files first, then decides export method based on count
+- Improved notification messages to indicate ZIP creation process
+
+---
+
 - When filtering and selecting hierarchies, only copies branches containing leaf targets
 - Example: "Metodología propuesta" and "Conclusiones" no longer copied when only "Introducción #filtrarEsto" is the target
 

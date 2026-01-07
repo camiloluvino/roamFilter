@@ -1,8 +1,8 @@
 {
-  "name": "roam-filter-copy",
-  "description": "Intelligently copies filtered blocks while respecting your selection. Copies only paths to selected descendants when filtering.",
+  "name": "roam-export-filter",
+  "description": "Intelligently copies and exports filtered blocks while respecting your selection. Exports root blocks as individual files or ZIP.",
   "author": "Camilo Luvino",
   "entry": "extension.js",
-  "source": "https://github.com/camiloluvino/roamFilter",
+  "source": "https://github.com/camiloluvino/roamExportFilter",
   "license": "MIT"
 }
