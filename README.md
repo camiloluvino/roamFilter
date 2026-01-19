@@ -4,34 +4,37 @@ A Roam Research plugin that exports filtered content using Datalog queries. Work
 
 ## Features
 
+- **Unified Export Modal**: Single command with two export modes (by tag or by branch selection)
 - **Query-Based Export**: Uses Datalog to find blocks, not DOM traversal
 - **Current Page Scope**: Searches only within the currently open page
 - **Works with Collapsed Blocks**: Finds content regardless of UI state
-- **Complete Hierarchy**: Exports ancestral context + all descendants
-- **Smart Filtering**: Only exports branches containing the target tag
-- **Flexible Input**: Supports `#tag`, `[[tag]]`, and `#[[tag]]` formats
+- **One File Per Branch**: Each selected branch exports as a separate .md file
+- **Depth Selector**: Choose 1-4 hierarchy levels to display (default: 2)
+- **ZIP Auto-Bundle**: Automatically creates ZIP when exporting >5 files
 
 ## Commands
 
 | Command | Activation | Description |
 |---------|------------|-------------|
-| **Smart Copy Selected Blocks** | `Alt+Shift+C` | Copies visually selected (blue) blocks with smart path building |
-| **Export Filtered Content** | Command Palette | Searches by tag in current page → downloads as `.md` file |
-| **Copy Filtered Content** | Command Palette | Searches by tag in current page → copies to clipboard |
+| **Smart Export** | Command Palette | Unified modal with "Por Filtros" and "Por Ramas" tabs |
+| **Smart Copy Selected Blocks** | `Alt+Shift+C` | Copies visually selected (blue) blocks |
+| **Export by Root Blocks** | Command Palette | Exports each root block as separate file |
 
 ## How It Works
+
+### Smart Export (Recommended)
+1. Navigate to the page you want to export from
+2. Open Command Palette (`Cmd+P` or `Ctrl+P`)
+3. Search for "Smart Export"
+4. Choose tab:
+   - **Por Filtros**: Enter a tag to find all blocks with that tag
+   - **Por Ramas**: Select specific branches to export (one file per branch)
+5. Click "Exportar"
 
 ### Quick Copy (Visual Selection)
 1. Select blocks in Roam (they turn blue)
 2. Press `Alt+Shift+C`
 3. Content is copied to clipboard (Text + HTML)
-
-### Export by Tag
-1. Navigate to the page you want to export from
-2. Open Command Palette (`Cmd+P` or `Ctrl+P`)
-3. Search for "Export Filtered Content" or "Copy Filtered Content"
-4. Enter the tag name (any format: `tag`, `#tag`, `[[tag]]`, `#[[tag]]`)
-5. Content is exported/copied
 
 ## Example
 
@@ -75,7 +78,7 @@ document.head.appendChild(s);
 
 1. Go to `[[roam/js]]` page
 2. Create a `{{[[roam/js]]}}` block
-3. Paste the code from `extension.js` in a code block underneath
+3. Paste the code from `roam-filter.js` in a code block underneath
 4. Refresh the page
 
 ## Technical Details

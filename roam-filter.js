@@ -1,6 +1,6 @@
 // Roam Filter Export - Smart Export for Filtered Blocks
-// Version: 2.8.1
-// Date: 2026-01-07 02:42
+// Version: 2.11.1
+// Date: 2026-01-19 00:59
 //
 // Created by Camilo Luvino
 // https://github.com/camiloluvino/roamExportFilter
@@ -736,6 +736,547 @@ const showNotification = (message, backgroundColor) => {
   }
 };
 
+// ============================================
+// UNIFIED EXPORT MODAL (with tabs)
+// ============================================
+
+// Unified export modal with tabs for "Por Filtros" and "Por Ramas"
+const promptUnifiedExport = (pageName, pageUid) => {
+  return new Promise((resolve) => {
+    let currentDepth = 2; // Default depth
+
+    // Create modal overlay
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 10001;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    `;
+
+    // Create modal - LARGER for 1920x1080 screens
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+      background: white;
+      padding: 0;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      min-width: 800px;
+      max-width: 1000px;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto;
+      overflow: hidden;
+    `;
+
+    // Tab styles
+    const tabStyle = (active) => `
+      padding: 12px 24px;
+      font-size: 14px;
+      font-weight: 500;
+      border: none;
+      background: ${active ? 'white' : '#f0f0f0'};
+      color: ${active ? '#137CBD' : '#666'};
+      cursor: pointer;
+      border-bottom: ${active ? '2px solid #137CBD' : '2px solid transparent'};
+      transition: all 0.2s;
+    `;
+
+    // Depth button style
+    const depthBtnStyle = (isActive) => `
+      padding: 6px 12px;
+      font-size: 13px;
+      border: 1px solid ${isActive ? '#137CBD' : '#ccc'};
+      background: ${isActive ? '#137CBD' : 'white'};
+      color: ${isActive ? 'white' : '#666'};
+      cursor: pointer;
+      transition: all 0.2s;
+    `;
+
+    // Render tree structure with checkboxes for "Por Ramas" tab
+    const renderTree = (nodes, indentLevel = 0) => {
+      if (!nodes || nodes.length === 0) return '<p style="color: #888; padding: 12px;">No hay bloques en esta página</p>';
+      return nodes.map(node => {
+        const indent = indentLevel * 24;
+        const deepInfo = node.hasDeepChildren ? ` <span style="color: #888; font-size: 11px;">(+${node.deepChildrenCount} sub-bloques)</span>` : '';
+        return `
+          <div style="padding: 5px 0; padding-left: ${indent}px;">
+            <label style="display: flex; align-items: flex-start; cursor: pointer; gap: 8px;">
+              <input type="checkbox" data-uid="${node.uid}" class="branch-checkbox" style="margin-top: 3px; cursor: pointer; min-width: 16px;">
+              <span style="font-size: 14px; line-height: 1.5;" title="${(node.fullContent || node.content || '').replace(/"/g, '&quot;')}">${node.content}${deepInfo}</span>
+            </label>
+            ${node.children && node.children.length > 0 ? renderTree(node.children, indentLevel + 1) : ''}
+          </div>
+        `;
+      }).join('');
+    };
+
+    // Favorite tags chips
+    const tagsHtml = FAVORITE_TAGS.map(tag =>
+      `<span class="fav-tag-chip" data-tag="${tag}" style="
+        display: inline-block;
+        padding: 4px 10px;
+        margin: 2px;
+        background: #e8f4fc;
+        color: #137CBD;
+        border-radius: 12px;
+        font-size: 12px;
+        cursor: pointer;
+        transition: background 0.2s;
+      ">#${tag}</span>`
+    ).join('');
+
+    // Get initial structure with default depth
+    let structure = getPageStructure(pageUid, currentDepth);
+
+    modal.innerHTML = `
+      <!-- Header with tabs -->
+      <div style="display: flex; background: #f5f5f5; border-bottom: 1px solid #e0e0e0;">
+        <button id="tab-filters" style="${tabStyle(true)}">📋 Por Filtros</button>
+        <button id="tab-branches" style="${tabStyle(false)}">🌳 Por Ramas</button>
+        <div style="flex: 1;"></div>
+        <span style="padding: 12px 16px; font-size: 12px; color: #888;">${pageName}</span>
+      </div>
+      
+      <!-- Tab content container -->
+      <div style="padding: 20px; flex: 1; overflow-y: auto;">
+        
+        <!-- Por Filtros content -->
+        <div id="content-filters" style="display: block;">
+          <p style="margin: 0 0 12px 0; font-size: 14px; color: #666;">
+            Exportar bloques que contengan un tag específico:
+          </p>
+          <input type="text" id="unified-tag-input" 
+            style="width: 100%; padding: 12px 14px; font-size: 15px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;"
+            placeholder="Ej: #resumen, [[concepto]], etc."
+          />
+          <div style="margin-top: 16px;">
+            <p style="margin: 0 0 8px 0; font-size: 13px; color: #888;">Tags favoritos:</p>
+            <div id="fav-tags-container">${tagsHtml}</div>
+          </div>
+        </div>
+        
+        <!-- Por Ramas content -->
+        <div id="content-branches" style="display: none;">
+          <!-- Depth selector -->
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+            <span style="font-size: 13px; color: #666;">Profundidad:</span>
+            <div id="depth-selector" style="display: flex; border-radius: 4px; overflow: hidden;">
+              <button data-depth="1" style="${depthBtnStyle(false)}border-radius: 4px 0 0 4px;">1</button>
+              <button data-depth="2" style="${depthBtnStyle(true)}border-left: none;">2</button>
+              <button data-depth="3" style="${depthBtnStyle(false)}border-left: none;">3</button>
+              <button data-depth="4" style="${depthBtnStyle(false)}border-left: none; border-radius: 0 4px 4px 0;">4</button>
+            </div>
+            <span style="font-size: 12px; color: #999;">niveles de jerarquía</span>
+          </div>
+          
+          <p style="margin: 0 0 12px 0; font-size: 14px; color: #666;">
+            Selecciona las ramas que deseas exportar:
+          </p>
+          <div id="branch-tree-container" style="
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            padding: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+            background: #fafafa;
+          ">
+            ${renderTree(structure)}
+          </div>
+          <div style="margin-top: 12px; padding: 12px; background: #f5f5f5; border-radius: 4px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;">
+              <input type="checkbox" id="branch-filter-enabled">
+              <span>Filtrar por tag (opcional):</span>
+            </label>
+            <input type="text" id="branch-filter-tag" 
+              style="width: 100%; padding: 8px 12px; font-size: 13px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; margin-top: 8px; opacity: 0.5;"
+              placeholder="Ej: #resumen"
+              disabled
+            />
+          </div>
+        </div>
+        
+      </div>
+      
+      <!-- Footer -->
+      <div style="padding: 16px 20px; border-top: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; background: #fafafa;">
+        <span id="selection-info" style="font-size: 13px; color: #666;"></span>
+        <div style="display: flex; gap: 8px;">
+          <button id="unified-cancel" 
+            style="padding: 10px 20px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer;">
+            Cancelar
+          </button>
+          <button id="unified-export" 
+            style="padding: 10px 20px; font-size: 14px; border: none; border-radius: 4px; background: #137CBD; color: white; cursor: pointer;">
+            Exportar
+          </button>
+        </div>
+      </div>
+    `;
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    // Get elements
+    const tabFilters = document.getElementById('tab-filters');
+    const tabBranches = document.getElementById('tab-branches');
+    const contentFilters = document.getElementById('content-filters');
+    const contentBranches = document.getElementById('content-branches');
+    const tagInput = document.getElementById('unified-tag-input');
+    const branchFilterEnabled = document.getElementById('branch-filter-enabled');
+    const branchFilterTag = document.getElementById('branch-filter-tag');
+    const selectionInfo = document.getElementById('selection-info');
+    const cancelBtn = document.getElementById('unified-cancel');
+    const exportBtn = document.getElementById('unified-export');
+    const treeContainer = document.getElementById('branch-tree-container');
+    const favTagsContainer = document.getElementById('fav-tags-container');
+
+    let activeTab = 'filters';
+
+    // Tab switching
+    const switchTab = (tab) => {
+      activeTab = tab;
+      if (tab === 'filters') {
+        tabFilters.style.cssText = tabStyle(true);
+        tabBranches.style.cssText = tabStyle(false);
+        contentFilters.style.display = 'block';
+        contentBranches.style.display = 'none';
+        selectionInfo.textContent = '';
+        tagInput.focus();
+      } else {
+        tabFilters.style.cssText = tabStyle(false);
+        tabBranches.style.cssText = tabStyle(true);
+        contentFilters.style.display = 'none';
+        contentBranches.style.display = 'block';
+        updateBranchCount();
+      }
+    };
+
+    tabFilters.addEventListener('click', () => switchTab('filters'));
+    tabBranches.addEventListener('click', () => switchTab('branches'));
+
+    // Depth selector logic
+    const depthSelector = document.getElementById('depth-selector');
+    const updateDepth = (newDepth) => {
+      if (newDepth === currentDepth) return;
+      currentDepth = newDepth;
+
+      // Update button styles
+      depthSelector.querySelectorAll('button').forEach(btn => {
+        const d = parseInt(btn.dataset.depth);
+        const isFirst = d === 1;
+        const isLast = d === 4;
+        const isActive = d === currentDepth;
+        btn.style.cssText = `
+          padding: 6px 12px;
+          font-size: 13px;
+          border: 1px solid ${isActive ? '#137CBD' : '#ccc'};
+          background: ${isActive ? '#137CBD' : 'white'};
+          color: ${isActive ? 'white' : '#666'};
+          cursor: pointer;
+          transition: all 0.2s;
+          ${isFirst ? 'border-radius: 4px 0 0 4px;' : ''}
+          ${isLast ? 'border-radius: 0 4px 4px 0;' : ''}
+          ${!isFirst ? 'border-left: none;' : ''}
+        `;
+      });
+
+      // Re-fetch structure with new depth and re-render tree
+      structure = getPageStructure(pageUid, currentDepth);
+      treeContainer.innerHTML = renderTree(structure);
+
+      // Re-attach checkbox listeners
+      treeContainer.querySelectorAll('.branch-checkbox').forEach(cb => {
+        cb.addEventListener('change', updateBranchCount);
+      });
+
+      updateBranchCount();
+    };
+
+    depthSelector.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', () => updateDepth(parseInt(btn.dataset.depth)));
+    });
+
+    // Update branch selection count
+    const updateBranchCount = () => {
+      const checked = treeContainer.querySelectorAll('.branch-checkbox:checked');
+      const count = checked.length;
+      selectionInfo.textContent = `${count} rama${count !== 1 ? 's' : ''} seleccionada${count !== 1 ? 's' : ''}`;
+    };
+
+    // Add event listeners to branch checkboxes
+    treeContainer.querySelectorAll('.branch-checkbox').forEach(cb => {
+      cb.addEventListener('change', updateBranchCount);
+    });
+
+    // Favorite tags click
+    favTagsContainer.querySelectorAll('.fav-tag-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        tagInput.value = chip.dataset.tag;
+        tagInput.focus();
+      });
+      chip.addEventListener('mouseenter', () => {
+        chip.style.background = '#cce7f5';
+      });
+      chip.addEventListener('mouseleave', () => {
+        chip.style.background = '#e8f4fc';
+      });
+    });
+
+    // Branch filter toggle
+    branchFilterEnabled.addEventListener('change', () => {
+      branchFilterTag.disabled = !branchFilterEnabled.checked;
+      branchFilterTag.style.opacity = branchFilterEnabled.checked ? '1' : '0.5';
+      if (branchFilterEnabled.checked) {
+        branchFilterTag.focus();
+      }
+    });
+
+    const cleanup = () => {
+      document.body.removeChild(overlay);
+    };
+
+    const getSelectedBranchUids = () => {
+      const checked = treeContainer.querySelectorAll('.branch-checkbox:checked');
+      return Array.from(checked).map(cb => cb.dataset.uid);
+    };
+
+    cancelBtn.addEventListener('click', () => {
+      cleanup();
+      resolve({ cancelled: true });
+    });
+
+    exportBtn.addEventListener('click', () => {
+      if (activeTab === 'filters') {
+        const tagValue = tagInput.value.trim();
+        if (!tagValue) {
+          tagInput.style.borderColor = '#DC143C';
+          tagInput.focus();
+          return;
+        }
+        cleanup();
+        resolve({
+          cancelled: false,
+          mode: 'filters',
+          tagName: cleanTagInput(tagValue)
+        });
+      } else {
+        const selectedUids = getSelectedBranchUids();
+        if (selectedUids.length === 0) {
+          alert('Por favor selecciona al menos una rama para exportar.');
+          return;
+        }
+        cleanup();
+        resolve({
+          cancelled: false,
+          mode: 'branches',
+          selectedUids,
+          filterTag: branchFilterEnabled.checked ? cleanTagInput(branchFilterTag.value) : null
+        });
+      }
+    });
+
+    // Close on overlay click
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        cleanup();
+        resolve({ cancelled: true });
+      }
+    });
+
+    // Close on Escape, submit on Enter (for filters tab)
+    const handleKeydown = (e) => {
+      if (e.key === 'Escape') {
+        cleanup();
+        resolve({ cancelled: true });
+        document.removeEventListener('keydown', handleKeydown);
+      }
+      if (e.key === 'Enter' && activeTab === 'filters' && tagInput.value.trim()) {
+        cleanup();
+        resolve({
+          cancelled: false,
+          mode: 'filters',
+          tagName: cleanTagInput(tagInput.value.trim())
+        });
+        document.removeEventListener('keydown', handleKeydown);
+      }
+    };
+    document.addEventListener('keydown', handleKeydown);
+
+    // Focus input on open
+    tagInput.focus();
+  });
+};
+
+// Main unified export function
+const unifiedExport = async () => {
+  try {
+    // Get current page
+    const pageUid = getCurrentPageUid();
+    if (!pageUid) {
+      showNotification('❌ Abre una página primero', '#DC143C');
+      return;
+    }
+
+    // Get page name
+    const pageInfo = window.roamAlphaAPI.pull('[:node/title :block/string]', [':block/uid', pageUid]);
+    const pageName = pageInfo?.[':node/title'] || pageInfo?.[':block/string'] || 'Unknown Page';
+
+    // Show unified modal (passes pageUid so modal can fetch structure with dynamic depth)
+    const result = await promptUnifiedExport(pageName, pageUid);
+
+    if (result.cancelled) {
+      return;
+    }
+
+    if (result.mode === 'filters') {
+      // Export by tag filter
+      const tagName = result.tagName;
+      if (!tagName) {
+        showNotification('❌ Invalid tag name', '#DC143C');
+        return;
+      }
+
+      showNotification(`🔍 Searching for #${tagName}...`, '#137CBD');
+
+      const targetBlocks = findBlocksByTag(tagName);
+      if (!targetBlocks || targetBlocks.length === 0) {
+        showNotification(`❌ No blocks found with #${tagName}`, '#DC143C');
+        return;
+      }
+
+      const exportTree = buildExportTree(targetBlocks);
+      if (!exportTree || exportTree.length === 0) {
+        showNotification('❌ Could not build export tree', '#DC143C');
+        return;
+      }
+
+      const markdown = treeToMarkdown(exportTree);
+      const header = generateHeader(tagName, targetBlocks.length);
+      const filename = generateFilename(tagName);
+
+      const success = downloadFile(header + markdown, filename);
+      if (success) {
+        showNotification(`✓ Exported ${targetBlocks.length} blocks`, '#28a745');
+      }
+
+    } else if (result.mode === 'branches') {
+      // Export by branch selection - ONE FILE PER BRANCH
+      const { selectedUids, filterTag } = result;
+
+      showNotification(`📄 Procesando ${selectedUids.length} ramas...`, '#137CBD');
+
+      // Build files array - one per selected branch
+      const files = [];
+      let orderPrefix = 1;
+
+      for (const uid of selectedUids) {
+        try {
+          // If filter tag specified, check if this branch contains it
+          if (filterTag) {
+            const hasTag = window.roamAlphaAPI.data.q(`
+              [:find ?match .
+               :where
+               [?tag :node/title "${filterTag}"]
+               [?root :block/uid "${uid}"]
+               (or
+                 [?root :block/refs ?tag]
+                 (and
+                   [?descendant :block/parents ?root]
+                   [?descendant :block/refs ?tag])
+                 (and
+                   [?descendant :block/parents ?ancestor]
+                   [?ancestor :block/parents ?root]
+                   [?descendant :block/refs ?tag]))
+               [(identity ?root) ?match]]
+            `);
+
+            if (!hasTag) continue; // Skip branches without the tag
+          }
+
+          // Get the branch with all its descendants (NO ancestors)
+          const branchTree = getBlockWithDescendants(uid);
+
+          if (!branchTree) continue;
+
+          // Get the root content for filename
+          const rootContent = branchTree.content || 'untitled';
+          const prefix = String(orderPrefix).padStart(2, '0') + '_';
+          const filename = prefix + generateRootFilename(rootContent);
+
+          // Generate markdown - tree is already in correct format
+          const markdown = treeToMarkdown([branchTree]);
+          const header = `# ${rootContent}\n> Generated: ${new Date().toLocaleString()}${filterTag ? `\n> Filter: #${filterTag}` : ''}\n\n---\n\n`;
+
+          files.push({
+            filename,
+            content: header + markdown
+          });
+
+          orderPrefix++;
+        } catch (err) {
+          console.error(`Error processing branch ${uid}:`, err);
+        }
+      }
+
+      if (files.length === 0) {
+        const filterMsg = filterTag ? ` con tag #${filterTag}` : '';
+        showNotification(`❌ No se encontró contenido${filterMsg}`, '#DC143C');
+        return;
+      }
+
+      // Download based on file count
+      if (files.length <= 5) {
+        // Individual downloads
+        for (const file of files) {
+          downloadFile(file.content, file.filename);
+        }
+        showNotification(`✓ Exportados ${files.length} archivos`, '#28a745');
+      } else {
+        // ZIP download
+        try {
+          const JSZip = await loadJSZip();
+          const zip = new JSZip();
+
+          for (const file of files) {
+            zip.file(file.filename, file.content);
+          }
+
+          const date = new Date().toISOString().split('T')[0];
+          const safePageName = pageName.replace(/[\/\\:*?"<>|]/g, '_').substring(0, 30);
+          const zipFilename = `export_${safePageName}_${date}.zip`;
+
+          const blob = await zip.generateAsync({ type: 'blob' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = zipFilename;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+
+          showNotification(`✓ Exportado ZIP con ${files.length} archivos`, '#28a745');
+        } catch (err) {
+          console.error('Error creating ZIP:', err);
+          showNotification('❌ Error creando ZIP', '#DC143C');
+        }
+      }
+    }
+
+  } catch (err) {
+    console.error('Error in unifiedExport:', err);
+    showNotification(`❌ Error: ${err.message}`, '#DC143C');
+  }
+};
+
 const promptForTag = () => {
   return new Promise((resolve) => {
     // Create modal overlay
@@ -1274,6 +1815,388 @@ const exportByRootBlocks = async () => {
   }
 };
 
+// ============================================
+// EXPORT BY BRANCH SELECTION
+// ============================================
+
+// Get page structure limited to maxDepth levels for the branch selector
+const getPageStructure = (pageUid, maxDepth = 3) => {
+  if (!isRoamAPIAvailable() || !pageUid) {
+    return [];
+  }
+
+  try {
+    const pageData = window.roamAlphaAPI.pull(
+      '[:block/uid {:block/children [:block/uid :block/string :block/order {:block/children [:block/uid]}]}]',
+      [':block/uid', pageUid]
+    );
+
+    if (!pageData || !pageData[':block/children']) {
+      return [];
+    }
+
+    const buildStructure = (blocks, currentLevel) => {
+      if (!blocks || blocks.length === 0 || currentLevel > maxDepth) {
+        return [];
+      }
+
+      return blocks
+        .sort((a, b) => (a[':block/order'] || 0) - (b[':block/order'] || 0))
+        .map(block => {
+          const uid = block[':block/uid'];
+          if (!uid) return null;
+
+          // Fetch full block data
+          const fullBlock = window.roamAlphaAPI.pull(
+            '[:block/uid :block/string :block/order {:block/children [:block/uid :block/order]}]',
+            [':block/uid', uid]
+          );
+
+          if (!fullBlock) return null;
+
+          const content = fullBlock[':block/string'] || '';
+          const children = fullBlock[':block/children'] || [];
+
+          // Check if there are children beyond maxDepth
+          const hasDeepChildren = currentLevel === maxDepth && children.length > 0;
+
+          // Count total descendants for display
+          let deepChildrenCount = 0;
+          if (hasDeepChildren) {
+            const countDescendants = (blockUid) => {
+              const b = window.roamAlphaAPI.pull(
+                '[{:block/children [:block/uid]}]',
+                [':block/uid', blockUid]
+              );
+              const c = b?.[':block/children'] || [];
+              return c.length + c.reduce((sum, child) => sum + countDescendants(child[':block/uid']), 0);
+            };
+            deepChildrenCount = children.length + children.reduce((sum, c) => sum + countDescendants(c[':block/uid']), 0);
+          }
+
+          return {
+            uid,
+            content: content.length > 60 ? content.substring(0, 57) + '...' : content,
+            fullContent: content,
+            level: currentLevel,
+            hasDeepChildren,
+            deepChildrenCount,
+            children: currentLevel < maxDepth ? buildStructure(children, currentLevel + 1) : []
+          };
+        })
+        .filter(Boolean);
+    };
+
+    return buildStructure(pageData[':block/children'], 1);
+  } catch (err) {
+    console.error('Error in getPageStructure:', err);
+    return [];
+  }
+};
+
+// Fetch blocks with their parents for export (format compatible with buildExportTree)
+const fetchBlocksForExport = (selectedUids, filterTag = null) => {
+  if (!selectedUids || selectedUids.length === 0) {
+    return [];
+  }
+
+  const blocks = [];
+
+  for (const uid of selectedUids) {
+    try {
+      // Get block with parents
+      const result = window.roamAlphaAPI.data.q(`
+        [:find (pull ?block [:block/uid :block/string :block/order
+                             {:block/parents [:block/uid :block/string :block/order]}])
+         :where
+         [?block :block/uid "${uid}"]]
+      `);
+
+      if (result && result.length > 0 && result[0][0]) {
+        const block = result[0][0];
+
+        // If filter tag is specified, check if this block or its descendants contain it
+        if (filterTag) {
+          const hasTag = window.roamAlphaAPI.data.q(`
+            [:find ?match .
+             :where
+             [?tag :node/title "${filterTag}"]
+             [?root :block/uid "${uid}"]
+             (or
+               [?root :block/refs ?tag]
+               (and
+                 [?descendant :block/parents ?root]
+                 [?descendant :block/refs ?tag])
+               (and
+                 [?descendant :block/parents ?ancestor]
+                 [?ancestor :block/parents ?root]
+                 [?descendant :block/refs ?tag]))
+             [(identity ?root) ?match]]
+          `);
+
+          if (!hasTag) continue; // Skip blocks without the tag
+        }
+
+        blocks.push(block);
+      }
+    } catch (err) {
+      console.error(`Error fetching block ${uid}:`, err);
+    }
+  }
+
+  return blocks;
+};
+
+// Prompt for branch selection with visual tree
+const promptForBranchSelection = (pageName, structure) => {
+  return new Promise((resolve) => {
+    // Create modal overlay
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 10001;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    `;
+
+    // Create modal
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+      background: white;
+      padding: 24px;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      min-width: 500px;
+      max-width: 700px;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto;
+    `;
+
+    // Render tree structure with checkboxes
+    const renderTree = (nodes, indentLevel = 0) => {
+      return nodes.map(node => {
+        const indent = indentLevel * 20;
+        const deepInfo = node.hasDeepChildren ? ` <span style="color: #888; font-size: 11px;">(+${node.deepChildrenCount} sub-bloques)</span>` : '';
+        return `
+          <div style="padding: 4px 0; padding-left: ${indent}px;">
+            <label style="display: flex; align-items: flex-start; cursor: pointer; gap: 8px;">
+              <input type="checkbox" data-uid="${node.uid}" style="margin-top: 3px; cursor: pointer;">
+              <span style="font-size: 13px; line-height: 1.4;" title="${node.fullContent.replace(/"/g, '&quot;')}">${node.content}${deepInfo}</span>
+            </label>
+            ${node.children && node.children.length > 0 ? renderTree(node.children, indentLevel + 1) : ''}
+          </div>
+        `;
+      }).join('');
+    };
+
+    modal.innerHTML = `
+      <h3 style="margin: 0 0 8px 0; font-size: 16px; color: #333;">
+        📂 Seleccionar ramas para exportar
+      </h3>
+      <p style="margin: 0 0 16px 0; font-size: 13px; color: #666;">
+        Página: <strong>${pageName}</strong>
+      </p>
+      
+      <div id="branch-tree-container" style="
+        flex: 1;
+        overflow-y: auto;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        padding: 12px;
+        margin-bottom: 16px;
+        max-height: 400px;
+        background: #fafafa;
+      ">
+        ${structure.length > 0 ? renderTree(structure) : '<p style="color: #888;">No hay bloques en esta página</p>'}
+      </div>
+      
+      <div style="margin-bottom: 16px; padding: 12px; background: #f5f5f5; border-radius: 4px;">
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;">
+          <input type="checkbox" id="branch-filter-enabled">
+          <span>Filtrar por tag (opcional):</span>
+        </label>
+        <input type="text" id="branch-filter-tag" 
+          style="width: 100%; padding: 8px 12px; font-size: 13px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; margin-top: 8px; opacity: 0.5;"
+          placeholder="Ej: #resumen, [[concepto]], etc."
+          disabled
+        />
+      </div>
+      
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <span id="branch-selection-count" style="font-size: 13px; color: #666;">0 ramas seleccionadas</span>
+        <div style="display: flex; gap: 8px;">
+          <button id="branch-cancel" 
+            style="padding: 8px 16px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; background: #f5f5f5; cursor: pointer;">
+            Cancelar
+          </button>
+          <button id="branch-export" 
+            style="padding: 8px 16px; font-size: 14px; border: none; border-radius: 4px; background: #137CBD; color: white; cursor: pointer;">
+            Exportar
+          </button>
+        </div>
+      </div>
+    `;
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    // Get elements
+    const cancelBtn = document.getElementById('branch-cancel');
+    const exportBtn = document.getElementById('branch-export');
+    const filterEnabled = document.getElementById('branch-filter-enabled');
+    const filterTag = document.getElementById('branch-filter-tag');
+    const selectionCount = document.getElementById('branch-selection-count');
+    const treeContainer = document.getElementById('branch-tree-container');
+
+    // Update selection count
+    const updateCount = () => {
+      const checked = treeContainer.querySelectorAll('input[type="checkbox"]:checked');
+      const count = checked.length;
+      selectionCount.textContent = `${count} rama${count !== 1 ? 's' : ''} seleccionada${count !== 1 ? 's' : ''}`;
+    };
+
+    // Add event listeners to checkboxes
+    treeContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+      cb.addEventListener('change', updateCount);
+    });
+
+    // Filter toggle
+    filterEnabled.addEventListener('change', () => {
+      filterTag.disabled = !filterEnabled.checked;
+      filterTag.style.opacity = filterEnabled.checked ? '1' : '0.5';
+      if (filterEnabled.checked) {
+        filterTag.focus();
+      }
+    });
+
+    const cleanup = () => {
+      document.body.removeChild(overlay);
+    };
+
+    const getSelectedUids = () => {
+      const checked = treeContainer.querySelectorAll('input[type="checkbox"]:checked');
+      return Array.from(checked).map(cb => cb.dataset.uid);
+    };
+
+    cancelBtn.addEventListener('click', () => {
+      cleanup();
+      resolve({ cancelled: true });
+    });
+
+    exportBtn.addEventListener('click', () => {
+      const selectedUids = getSelectedUids();
+      if (selectedUids.length === 0) {
+        alert('Por favor selecciona al menos una rama para exportar.');
+        return;
+      }
+      cleanup();
+      resolve({
+        cancelled: false,
+        selectedUids,
+        filterTag: filterEnabled.checked ? cleanTagInput(filterTag.value) : null
+      });
+    });
+
+    // Close on overlay click
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        cleanup();
+        resolve({ cancelled: true });
+      }
+    });
+
+    // Close on Escape
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        cleanup();
+        resolve({ cancelled: true });
+        document.removeEventListener('keydown', handleEscape);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+  });
+};
+
+// Main export by branch selection function
+const exportByBranchSelection = async () => {
+  try {
+    // Step 1: Get current page
+    const pageUid = getCurrentPageUid();
+    if (!pageUid) {
+      showNotification('❌ Could not detect current page', '#DC143C');
+      return;
+    }
+
+    // Get page name
+    const pageInfo = window.roamAlphaAPI.pull('[:node/title :block/string]', [':block/uid', pageUid]);
+    const pageName = pageInfo?.[':node/title'] || pageInfo?.[':block/string'] || 'Unknown Page';
+
+    // Step 2: Get page structure (limited to 3 levels)
+    showNotification('📊 Loading page structure...', '#137CBD');
+    const structure = getPageStructure(pageUid, 3);
+
+    if (structure.length === 0) {
+      showNotification('❌ No blocks found on this page', '#DC143C');
+      return;
+    }
+
+    // Step 3: Show branch selection modal
+    const { cancelled, selectedUids, filterTag } = await promptForBranchSelection(pageName, structure);
+
+    if (cancelled) {
+      return;
+    }
+
+    showNotification(`📄 Processing ${selectedUids.length} selected branches...`, '#137CBD');
+
+    // Step 4: Fetch blocks with parents (optionally filtered)
+    const blocks = fetchBlocksForExport(selectedUids, filterTag);
+
+    if (blocks.length === 0) {
+      const filterMsg = filterTag ? ` with tag #${filterTag}` : '';
+      showNotification(`❌ No content found${filterMsg}`, '#DC143C');
+      return;
+    }
+
+    // Step 5: Build export tree and convert to markdown
+    const exportTree = buildExportTree(blocks);
+
+    if (!exportTree || exportTree.length === 0) {
+      showNotification('❌ Could not build export tree', '#DC143C');
+      return;
+    }
+
+    const markdown = treeToMarkdown(exportTree);
+
+    // Step 6: Generate filename and download
+    const date = new Date().toISOString().split('T')[0];
+    const safePageName = pageName.replace(/[\/\\:*?"<>|]/g, '_').substring(0, 30);
+    const filterSuffix = filterTag ? `_${filterTag.replace(/[\/\\:*?"<>|]/g, '_')}` : '';
+    const filename = `branches_${safePageName}${filterSuffix}_${date}.md`;
+
+    const header = `# Export: ${pageName}\n> Generated: ${new Date().toLocaleString()}\n> Branches: ${selectedUids.length}${filterTag ? `\n> Filter: #${filterTag}` : ''}\n\n---\n\n`;
+
+    const success = downloadFile(header + markdown, filename);
+
+    if (success) {
+      const filterMsg = filterTag ? ` (filtered by #${filterTag})` : '';
+      showNotification(`✓ Exported ${selectedUids.length} branches${filterMsg}`, '#28a745');
+    }
+
+  } catch (err) {
+    console.error('Error in exportByBranchSelection:', err);
+    showNotification(`❌ Error: ${err.message}`, '#DC143C');
+  }
+};
+
 // Convert tree to HTML for rich pasting
 const treeToHTML = (trees, indentLevel = 0) => {
   if (!trees || trees.length === 0) {
@@ -1616,21 +2539,14 @@ const initExtension = () => {
 
   // Register commands in Command Palette
   if (window.roamAlphaAPI?.ui?.commandPalette) {
-    // Export to file (by tag)
+    // Main unified export command (with tabs)
     window.roamAlphaAPI.ui.commandPalette.addCommand({
-      label: "Export Filtered Content",
-      callback: exportFilteredContent,
+      label: "Smart Export",
+      callback: unifiedExport,
       "disable-hotkey": false
     });
 
-    // Copy to clipboard (by tag)
-    window.roamAlphaAPI.ui.commandPalette.addCommand({
-      label: "Copy Filtered Content",
-      callback: copyFilteredContent,
-      "disable-hotkey": false
-    });
-
-    // Visual selection copy
+    // Visual selection copy (keep separate - different functionality)
     window.roamAlphaAPI.ui.commandPalette.addCommand({
       label: "Smart Copy Selected Blocks",
       callback: () => {
@@ -1640,7 +2556,7 @@ const initExtension = () => {
       "disable-hotkey": false
     });
 
-    // Export by root blocks
+    // Export by root blocks (keep for now - different output format)
     window.roamAlphaAPI.ui.commandPalette.addCommand({
       label: "Export by Root Blocks",
       callback: exportByRootBlocks,
@@ -1648,15 +2564,14 @@ const initExtension = () => {
     });
   }
 
-  console.log("Roam Filter Export extension loaded");
+  console.log("Roam Filter Export extension loaded (v2.10.0)");
 };
 
 const cleanupExtension = () => {
   document.removeEventListener('keydown', handleKeyDown);
 
   if (window.roamAlphaAPI?.ui?.commandPalette) {
-    window.roamAlphaAPI.ui.commandPalette.removeCommand({ label: "Export Filtered Content" });
-    window.roamAlphaAPI.ui.commandPalette.removeCommand({ label: "Copy Filtered Content" });
+    window.roamAlphaAPI.ui.commandPalette.removeCommand({ label: "Smart Export" });
     window.roamAlphaAPI.ui.commandPalette.removeCommand({ label: "Smart Copy Selected Blocks" });
     window.roamAlphaAPI.ui.commandPalette.removeCommand({ label: "Export by Root Blocks" });
   }

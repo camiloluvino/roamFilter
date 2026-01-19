@@ -1,12 +1,12 @@
 # Project Status - Roam Export Filter
 
-> **Última actualización**: 2026-01-18
+> **Última actualización**: 2026-01-19 01:04
 
 ---
 
 ## Versión actual
 
-**2.8.1** (2026-01-07 02:42)
+**2.11.1** (2026-01-19 00:59)
 
 ---
 
@@ -14,33 +14,31 @@
 
 | Funcionalidad | Estado | Notas |
 |---------------|--------|-------|
+| **Smart Export** | ✅ Estable | Modal unificado con pestañas "Por Filtros" y "Por Ramas" |
 | **Smart Copy (Alt+Shift+C)** | ✅ Estable | Copia bloques visualmente seleccionados |
-| **Export Filtered Content** | ✅ Estable | Exporta a archivo .md por tag |
-| **Copy Filtered Content** | ✅ Estable | Copia al clipboard por tag |
 | **Export by Root Blocks** | ✅ Estable | Exporta cada bloque raíz como archivo separado |
 | **ZIP Export (>5 files)** | ✅ Estable | Bundling automático con JSZip |
-| **Filename Order Prefix** | ✅ Estable | Prefijos 01_, 02_ para ordenar archivos |
+| **Selector de profundidad** | ✅ Estable | Niveles 1-4 (default: 2) en pestaña "Por Ramas" |
 
 ---
 
 ## Historial reciente
 
-### v2.8.1 (2026-01-07)
-- Changed: Favorite tags en lugar de detección dinámica para reducir ruido
+### v2.11.1 (2026-01-19 00:59)
+- Fixed: **Indentación de ramas** - Ahora exporta solo rama + descendientes, sin ancestros
+- Changed: Usa `getBlockWithDescendants()` directamente para estructura correcta
 
-### v2.8.0 (2026-01-07)
-- Added: Toggle de orden en Export by Root Blocks
-- Added: Preview count en vivo con debounce
-- Added: Tag chips clickeables
+### v2.11.0 (2026-01-19 00:43)
+- Added: **Un archivo por rama** - Cada rama seleccionada genera archivo separado
+- Added: Prefijos de orden (01_, 02_...) en nombres de archivo
+- Added: ZIP automático si >5 ramas
 
-### v2.7.2 (2026-01-07)
-- Changed: Orden invertido de prefijos (bottom = 01_)
+### v2.10.1 (2026-01-19 00:34)
+- Added: **Selector de profundidad** - Niveles 1-4 en pestaña "Por Ramas"
+- Changed: Modal más grande (800-1000px) para pantallas 1920x1080
 
-### v2.7.1 (2025-12-20)
-- Added: Prefijos de orden en nombres de archivo
-
-### v2.7.0 (2025-12-20)
-- Added: ZIP export automático cuando hay >5 archivos
+### v2.10.0 (2026-01-19 00:22)
+- Added: **Modal Unificado** - Comando "Smart Export" con pestañas "Por Filtros" y "Por Ramas"
 
 ---
 
@@ -52,7 +50,8 @@
 
 ## Próximos pasos
 
-*Sin próximos pasos definidos actualmente.*
+- [ ] Probar exportación de ramas grandes con estructura profunda
+- [ ] Considerar agregar "Export by Root Blocks" al modal unificado
 
 ---
 
@@ -82,5 +81,7 @@
 
 | Fecha | Resumen |
 |-------|---------|
+| 2026-01-18 | Implementada funcionalidad "Export by Branch Selection" - selección manual de ramas para exportación con interfaz visual de checkboxes. |
 | 2026-01-18 | Reubicación de AI_INSTRUCTIONS.md y STATUS.md a raíz del proyecto. Añadida sección "Fragilidades y errores comunes". |
 | 2025-12-29 | Creación de AI_INSTRUCTIONS.md y STATUS.md para documentación orientada a IA. |
+

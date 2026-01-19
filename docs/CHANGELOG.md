@@ -1,5 +1,82 @@
 # Changelog
 
+## [2.11.1] - 2026-01-19 00:59
+
+### Fixed
+- **Branch export indentation**: Now exports only the selected branch with descendants, without including ancestors
+- Branches now export with correct nested structure instead of being flattened
+
+### Technical
+- Changed from `fetchBlocksForExport()` + `buildExportTree()` to using `getBlockWithDescendants()` directly
+- Maintains tag filter validation before processing each branch
+
+---
+
+## [2.11.0] - 2026-01-19 00:43
+
+### Added
+- **One file per branch**: "Por Ramas" now exports each selected branch as a separate .md file
+- Order prefixes (01_, 02_, etc.) on filenames to preserve selection order
+- Automatic ZIP when exporting more than 5 branches
+
+### Changed
+- Notifications now in Spanish for consistency
+
+---
+
+## [2.10.1] - 2026-01-19 00:34
+
+### Added
+- **Depth selector** in "Por Ramas" tab: Choose 1-4 levels of hierarchy (default: 2)
+- Tree re-renders dynamically when depth changes
+
+### Changed
+- **Larger modal**: 800-1000px wide (was 550-700px), 400px tree height (was 300px)
+- Optimized for 1920x1080 screens
+- Slightly larger font sizes for better readability
+
+---
+
+## [2.10.0] - 2026-01-19 00:22
+
+### Added
+- **Unified Export Modal**: Single command "Smart Export" opens a modal with two tabs:
+  - **📋 Por Filtros**: Export blocks by tag (replaces "Export Filtered Content")
+  - **🌳 Por Ramas**: Visual branch selection with checkboxes (includes optional tag filter)
+- Page name displayed in modal header
+- Favorite tags chips for quick selection in "Por Filtros" tab
+
+### Changed
+- Consolidated 3 commands into 1 unified "Smart Export" command
+- Removed "Export Filtered Content", "Copy Filtered Content", and "Export by Branch Selection" as separate commands
+
+### Technical
+- Added `promptUnifiedExport()`: Modal with tab system and dual functionality
+- Added `unifiedExport()`: Main orchestrator that handles both export modes
+- Simplified Command Palette registration (now only 3 commands)
+
+---
+
+## [2.9.0] - 2026-01-18
+
+### Added
+- **Export by Branch Selection**: New visual interface to manually select specific branches for export
+  - Shows page structure with checkboxes for the first 3 levels
+  - Indicates when blocks have deeper children (`+N sub-bloques`)
+  - Full tooltip on hover showing complete block text
+  - Real-time counter of selected branches
+- **Combined mode**: Optional tag filter within selected branches (e.g., "from chapter 3, only the #summaries")
+- New command in Command Palette: "Export by Branch Selection"
+
+### Technical
+- Added `getPageStructure()`: Fetches page tree limited to N levels for the branch selector
+- Added `fetchBlocksForExport()`: Converts selected UIDs to format compatible with `buildExportTree()`
+- Added `promptForBranchSelection()`: Modal UI with checkbox tree
+- Added `exportByBranchSelection()`: Main orchestration function
+- Reuses existing `buildExportTree()`, `treeToMarkdown()`, and `downloadFile()` functions
+
+---
+
 ## [2.8.1] - 2026-01-07 02:42
 
 ### Changed

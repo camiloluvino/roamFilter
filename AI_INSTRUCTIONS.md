@@ -4,7 +4,7 @@
 
 ## Descripción del proyecto
 
-Plugin para Roam Research que exporta contenido filtrado usando consultas Datalog. Funciona incluso cuando los bloques están colapsados. Ofrece tres modos: copia rápida con selección visual (`Alt+Shift+C`), exportación a archivo Markdown por tag, y copia al portapapeles por tag.
+Plugin para Roam Research que exporta contenido filtrado usando consultas Datalog. Funciona incluso cuando los bloques están colapsados. Ofrece múltiples modos: copia rápida con selección visual (`Alt+Shift+C`), exportación a archivo Markdown por tag, exportación por bloques raíz, y exportación por selección manual de ramas.
 
 ---
 
@@ -13,8 +13,12 @@ Plugin para Roam Research que exporta contenido filtrado usando consultas Datalo
 **CRÍTICO**: El archivo que DEBES editar es:
 
 ```
-extension.js    ← FUENTE DE VERDAD (edita este)
-roam-filter.js  ← Copia idéntica para GitHub Pages CDN
+roam-filter.js    ← ÚNICA FUENTE DE VERDAD
+```
+
+Este archivo se sirve desde GitHub Pages y es cargado por Roam Research:
+```javascript
+s.src = 'https://camiloluvino.github.io/roamFilter/roam-filter.js';
 ```
 
 ### Estructura del proyecto:
@@ -24,26 +28,25 @@ roamExportFilter/
 ├── docs/                   ← Documentación adicional (CHANGELOG)
 ├── tests/                  ← Suite de tests (tests.html)
 ├── reference/              ← Archivos de referencia (documentación Roam API)
-├── extension.js            ← FUENTE DE VERDAD
-├── roam-filter.js          ← Copia idéntica para CDN
-├── extension.json          ← Metadata del plugin
+├── roam-filter.js          ← ÚNICA FUENTE DE VERDAD
+├── extension.json          ← Metadata del plugin (legacy)
 ├── README.md               ← Documentación usuario
 ├── AI_INSTRUCTIONS.md      ← Este archivo (lee primero)
 └── STATUS.md               ← Estado actual del proyecto
 ```
 
-### Después de editar `extension.js`:
+### Después de editar `roam-filter.js`:
 
-1. Copia el contenido exacto a `roam-filter.js` (deben ser idénticos).
-2. Actualiza la versión y fecha en las líneas 1-3 del archivo.
-3. Actualiza `docs/CHANGELOG.md` con los cambios realizados.
-4. Actualiza `STATUS.md` al final de la sesión.
+1. Actualiza la versión y fecha en las líneas 1-3 del archivo.
+2. Actualiza `docs/CHANGELOG.md` con los cambios realizados.
+3. Actualiza `STATUS.md` al final de la sesión.
+4. Haz push a GitHub para que los cambios se reflejen en GitHub Pages.
 
 ---
 
 ## Arquitectura conceptual
 
-El código en `extension.js` está organizado en secciones lógicas marcadas con comentarios. **No es modular** porque Roam no soporta ES modules.
+El código en `roam-filter.js` está organizado en secciones lógicas marcadas con comentarios. **No es modular** porque Roam no soporta ES modules.
 
 ### Secciones principales:
 
@@ -72,9 +75,9 @@ El código en `extension.js` está organizado en secciones lógicas marcadas con
 
 **Roam Research no soporta ES modules (`import/export`)**. El código debe ejecutarse como un script único. Históricamente existió una carpeta `src/core/` con módulos separados, pero fue eliminada por estar obsoleta.
 
-### ¿Por qué existe `roam-filter.js`?
+### ¿Por qué se usa GitHub Pages?
 
-Es la misma fuente servida desde GitHub Pages CDN. Los usuarios cargan el plugin con:
+`roam-filter.js` se sirve desde GitHub Pages como CDN. Los usuarios cargan el plugin con:
 ```javascript
 s.src = 'https://camiloluvino.github.io/roamFilter/roam-filter.js';
 ```
@@ -93,7 +96,7 @@ Línea ~390. Lista editable de tags frecuentes para el modal de export by root b
 
 ### Versionado
 
-1. **Ubicación**: Líneas 1-3 de `extension.js`:
+1. **Ubicación**: Líneas 1-3 de `roam-filter.js`:
    ```javascript
    // Roam Filter Export - Smart Export for Filtered Blocks
    // Version: X.Y.Z
@@ -182,16 +185,16 @@ window.roamExportFilterCleanup = cleanupExtension;
 
 | Error | Prevención |
 |-------|------------|
-| Editar solo `roam-filter.js` | **SIEMPRE** edita `extension.js` primero, luego copia a `roam-filter.js` |
-| Olvidar actualizar versión/fecha | Verificar líneas 1-3 en cada cambio |
-| No incluir hora en la fecha | Formato obligatorio: `YYYY-MM-DD HH:MM` |
+| Olvidar actualizar versión/fecha | Verificar líneas 1-3 de `roam-filter.js` en cada cambio |
+| **No incluir hora en la fecha** | **Formato OBLIGATORIO: `YYYY-MM-DD HH:MM`** |
 | Usar ES modules (`import`/`export`) | Roam no los soporta; todo debe ser inline |
 | No envolver llamadas a API en try/catch | Toda llamada a `roamAlphaAPI` requiere manejo de errores |
 | Asumir que los números de línea son exactos | Las líneas en esta documentación son aproximadas; siempre verifica |
+| Olvidar hacer push a GitHub | Los cambios no se reflejan en Roam hasta hacer push |
 
 ### Puntos frágiles del sistema:
 
-1. **Sincronización de archivos**: `extension.js` y `roam-filter.js` DEBEN ser idénticos. Si divergen, los usuarios de CDN tendrán una versión diferente.
+1. **GitHub Pages**: Después de hacer push, puede tomar unos segundos en actualizarse. El cache-busting (`?v=Date.now()`) ayuda a cargar la versión más reciente.
 
 2. **Orden de bloques**: La lógica de ordenamiento (`globalOrderPath`, `compareOrderPaths`) es compleja. Cambios aquí pueden romper el orden de exportación.
 
