@@ -1,6 +1,6 @@
 // Roam Filter Export - Smart Export for Filtered Blocks
-// Version: 2.11.1
-// Date: 2026-01-19 00:59
+// Version: 2.12.0
+// Date: 2026-01-19 02:31
 //
 // Created by Camilo Luvino
 // https://github.com/camiloluvino/roamExportFilter
@@ -891,6 +891,10 @@ const promptUnifiedExport = (pageName, pageUid) => {
             ${renderTree(structure)}
           </div>
           <div style="margin-top: 12px; padding: 12px; background: #f5f5f5; border-radius: 4px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; margin-bottom: 12px;">
+              <input type="checkbox" id="order-prefix-enabled">
+              <span>Agregar prefijo de orden (01_, 02_, ...)</span>
+            </label>
             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;">
               <input type="checkbox" id="branch-filter-enabled">
               <span>Filtrar por tag (opcional):</span>
@@ -932,6 +936,7 @@ const promptUnifiedExport = (pageName, pageUid) => {
     const tagInput = document.getElementById('unified-tag-input');
     const branchFilterEnabled = document.getElementById('branch-filter-enabled');
     const branchFilterTag = document.getElementById('branch-filter-tag');
+    const orderPrefixEnabled = document.getElementById('order-prefix-enabled');
     const selectionInfo = document.getElementById('selection-info');
     const cancelBtn = document.getElementById('unified-cancel');
     const exportBtn = document.getElementById('unified-export');
@@ -1078,7 +1083,8 @@ const promptUnifiedExport = (pageName, pageUid) => {
           cancelled: false,
           mode: 'branches',
           selectedUids,
-          filterTag: branchFilterEnabled.checked ? cleanTagInput(branchFilterTag.value) : null
+          filterTag: branchFilterEnabled.checked ? cleanTagInput(branchFilterTag.value) : null,
+          useOrderPrefix: orderPrefixEnabled.checked
         });
       }
     });
@@ -1169,7 +1175,7 @@ const unifiedExport = async () => {
 
     } else if (result.mode === 'branches') {
       // Export by branch selection - ONE FILE PER BRANCH
-      const { selectedUids, filterTag } = result;
+      const { selectedUids, filterTag, useOrderPrefix } = result;
 
       showNotification(`📄 Procesando ${selectedUids.length} ramas...`, '#137CBD');
 
@@ -1208,7 +1214,7 @@ const unifiedExport = async () => {
 
           // Get the root content for filename
           const rootContent = branchTree.content || 'untitled';
-          const prefix = String(orderPrefix).padStart(2, '0') + '_';
+          const prefix = useOrderPrefix ? String(orderPrefix).padStart(2, '0') + '_' : '';
           const filename = prefix + generateRootFilename(rootContent);
 
           // Generate markdown - tree is already in correct format

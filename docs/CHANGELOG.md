@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.12.0] - 2026-01-19 02:31
+
+### Added
+- **Optional order prefix**: Checkbox to enable/disable order prefix (01_, 02_...) on filenames
+- Default is now OFF (no prefix), user can enable when order matters
+
+---
+
 ## [2.11.1] - 2026-01-19 00:59
 
 ### Fixed
