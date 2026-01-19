@@ -1,12 +1,12 @@
 # Project Status - Roam Export Filter
 
-> **Última actualización**: 2026-01-19 01:04
+> **Última actualización**: 2026-01-19 02:53
 
 ---
 
 ## Versión actual
 
-**2.11.1** (2026-01-19 00:59)
+**2.12.0** (2026-01-19 02:31)
 
 ---
 
@@ -17,28 +17,28 @@
 | **Smart Export** | ✅ Estable | Modal unificado con pestañas "Por Filtros" y "Por Ramas" |
 | **Smart Copy (Alt+Shift+C)** | ✅ Estable | Copia bloques visualmente seleccionados |
 | **Export by Root Blocks** | ✅ Estable | Exporta cada bloque raíz como archivo separado |
-| **ZIP Export (>5 files)** | ✅ Estable | Bundling automático con JSZip |
 | **Selector de profundidad** | ✅ Estable | Niveles 1-4 (default: 2) en pestaña "Por Ramas" |
+| **Prefijo de orden** | ✅ Estable | Opcional, agrega 01_, 02_... a nombres de archivo |
+| **ZIP Export (>5 files)** | ✅ Estable | Bundling automático con JSZip |
 
 ---
 
 ## Historial reciente
 
+### v2.12.0 (2026-01-19 02:31)
+- Added: **Toggle de prefijo de orden** - Checkbox opcional para agregar 01_, 02_... a archivos
+- Changed: Por defecto sin prefijo, usuario puede activarlo si necesita orden
+
 ### v2.11.1 (2026-01-19 00:59)
 - Fixed: **Indentación de ramas** - Ahora exporta solo rama + descendientes, sin ancestros
-- Changed: Usa `getBlockWithDescendants()` directamente para estructura correcta
 
 ### v2.11.0 (2026-01-19 00:43)
 - Added: **Un archivo por rama** - Cada rama seleccionada genera archivo separado
-- Added: Prefijos de orden (01_, 02_...) en nombres de archivo
 - Added: ZIP automático si >5 ramas
 
 ### v2.10.1 (2026-01-19 00:34)
 - Added: **Selector de profundidad** - Niveles 1-4 en pestaña "Por Ramas"
 - Changed: Modal más grande (800-1000px) para pantallas 1920x1080
-
-### v2.10.0 (2026-01-19 00:22)
-- Added: **Modal Unificado** - Comando "Smart Export" con pestañas "Por Filtros" y "Por Ramas"
 
 ---
 
@@ -50,8 +50,8 @@
 
 ## Próximos pasos
 
-- [ ] Probar exportación de ramas grandes con estructura profunda
 - [ ] Considerar agregar "Export by Root Blocks" al modal unificado
+- [ ] Probar con páginas muy grandes (>100 bloques)
 
 ---
 
