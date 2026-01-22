@@ -50,17 +50,16 @@ El código en `roam-filter.js` está organizado en secciones lógicas marcadas c
 
 ### Secciones principales:
 
-| Sección | Líneas aprox. | Responsabilidad |
-|---------|---------------|-----------------|
-| **JSZIP LOADING** | 11-28 | Carga JSZip desde CDN para exports >5 archivos |
-| **queries.js** | 34-211 | Consultas Datalog contra roamAlphaAPI |
-| **export-by-root.js** | 213-383 | Exportación por bloques raíz |
-| **tree-builder.js** | 385-624 | Construcción de árboles unificados |
-| **exporter.js** | 626-690 | Conversión a Markdown y descarga |
-| **MAIN EXTENSION LOGIC** | 692-960 | UI y orquestación de export/copy by tag |
-| **EXPORT BY ROOT BLOCKS** | 960-1178 | Modal y lógica de export por roots |
-| **VISUAL SELECTION COPY** | 1179-1484 | Alt+Shift+C para bloques seleccionados |
-| **EXTENSION INITIALIZATION** | 1492-1673 | Registro de comandos y cleanup |
+Busca estos comentarios en el código para ubicar cada sección:
+
+- **JSZIP LOADING** - Carga JSZip desde CDN para exports >5 archivos
+- **queries.js** - Consultas Datalog contra roamAlphaAPI
+- **export-by-root.js** - Exportación por bloques raíz
+- **tree-builder.js** - Construcción de árboles unificados
+- **exporter.js** - Conversión a Markdown y descarga
+- **MAIN EXTENSION LOGIC** - UI y orquestación de export/copy by tag
+- **VISUAL SELECTION COPY** - Alt+Shift+C para bloques seleccionados
+- **EXTENSION INITIALIZATION** - Registro de comandos y cleanup
 
 ### Flujo de dependencias:
 - Las funciones de `queries.js` son usadas por `tree-builder.js` y `export-by-root.js`
@@ -216,8 +215,34 @@ window.roamExportFilterCleanup = cleanupExtension;
 
 ---
 
+## Lecciones aprendidas
+
+### Dependencias CDN: siempre fijar versión
+
+Usar URLs genéricas como `unpkg.com/package` (sin versión) puede causar que librerías se actualicen silenciosamente y rompan el código. Ejemplo: EJS v4.0.0 eliminó soporte de browser, causando `ReferenceError: exports is not defined`.
+
+- ❌ Inseguro: `https://unpkg.com/package/file.js`
+- ✅ Seguro: `https://unpkg.com/package@x.y.z/file.js`
+
+### Verificar APIs antes de asumir
+
+No asumir que una librería tiene cierto método solo porque "debería". Si la documentación es escasa, revisar el código fuente. Ejemplo: asumimos que jEpub tenía `.css()` pero no existía.
+
+### Cache agresivo de Roam
+
+Roam y los browsers cachean scripts agresivamente. Después de hacer push:
+1. Esperar 30-60 segundos para propagación de CDN
+2. Siempre incluir `console.log("Loaded vX.Y.Z")` al inicio del script
+3. Verificar que el log muestra la versión esperada antes de diagnosticar "por qué no funcionó el fix"
+
+### Errores en cascada
+
+Un error fatal al cargar (ej: dependencia fallida) puede enmascarar errores en tiempo de ejecución (ej: API incorrecta). Al arreglar un error bloqueante, anticipar que el código subsecuente nunca se ejecutó y puede tener más errores.
+
+---
+
 ## Referencias adicionales
 
 - `reference/RoamResearch-developer-documentation-*.json`: Documentación oficial de la API
-- `tests/tests.html`: Suite de tests unitarios (15+ casos)
+- `tests/tests.html`: Suite de tests unitarios
 - `docs/CHANGELOG.md`: Historial detallado de cambios
