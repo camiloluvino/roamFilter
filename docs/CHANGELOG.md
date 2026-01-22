@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.14.4] - 2026-01-22 01:38
+
+### Fixed
+- **EPUB export error**: Fixed `TypeError: book.css is not a function`.
+  - The `jEpub` library does not support the `.css()` method (contrary to some documentation/assumptions).
+  - Replaced API call with manual inline CSS injection into the HTML content.
+
+## [2.14.3] - 2026-01-22 01:26
+
+### Fixed
+- **EPUB export dependency**: Fixed `ReferenceError: exports is not defined`.
+  - The generic CDN URL for `ejs` was floating to version 4.x, which dropped browser support.
+  - Pinned EJS to version `3.1.10` to ensure compatibility.
+
 ## [2.14.2] - 2026-01-22 01:13
 
 ### Fixed
