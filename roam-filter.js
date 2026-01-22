@@ -1,6 +1,6 @@
 // Roam Filter Export - Smart Export for Filtered Blocks
-// Version: 2.14.3
-// Date: 2026-01-22 01:26
+// Version: 2.14.4
+// Date: 2026-01-22 01:38
 //
 // Created by Camilo Luvino
 // https://github.com/camiloluvino/roamExportFilter
@@ -808,18 +808,21 @@ const downloadAsEpub = async (tree, title, options = {}) => {
     });
 
     // Add base CSS
-    book.css(`
-      body { 
-        font-family: Georgia, serif; 
-        line-height: 1.7; 
-        text-align: justify;
-      }
-      ul { margin-bottom: 0.5em; }
-      li { line-height: 1.6; }
-    `);
+    // Inject CSS directly into HTML content (jEpub doesn't have a css method)
+    const css = `
+      <style>
+        body { 
+          font-family: Georgia, serif; 
+          line-height: 1.7; 
+          text-align: justify;
+        }
+        ul { margin-bottom: 0.5em; }
+        li { line-height: 1.6; }
+      </style>
+    `;
 
-    // Add content as a single chapter
-    book.add(title, bodyContent);
+    // Add content as a single chapter with CSS
+    book.add(title, css + bodyContent);
 
     // Generate and download
     const blob = await book.generate('blob');
