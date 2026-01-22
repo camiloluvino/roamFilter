@@ -1,6 +1,6 @@
 // Roam Filter Export - Smart Export for Filtered Blocks
-// Version: 2.14.0
-// Date: 2026-01-22 00:40
+// Version: 2.14.3
+// Date: 2026-01-22 01:26
 //
 // Created by Camilo Luvino
 // https://github.com/camiloluvino/roamExportFilter
@@ -20,24 +20,39 @@ const loadJSZip = () => {
       return;
     }
     const script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+    script.src = 'https://unpkg.com/jszip/dist/jszip.min.js';
     script.onload = () => resolve(window.JSZip);
     script.onerror = () => reject(new Error('Failed to load JSZip'));
     document.head.appendChild(script);
   });
 };
 
-// Load jEpub from CDN for EPUB exports (depends on JSZip)
+// Load EJS from CDN (required by jEpub v2+)
+const loadEJS = () => {
+  return new Promise((resolve, reject) => {
+    if (window.ejs) {
+      resolve(window.ejs);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/ejs@3.1.10/ejs.min.js';
+    script.onload = () => resolve(window.ejs);
+    script.onerror = () => reject(new Error('Failed to load EJS'));
+    document.head.appendChild(script);
+  });
+};
+
+// Load jEpub from CDN for EPUB exports (depends on JSZip and EJS)
 const loadJEpub = () => {
   return new Promise((resolve, reject) => {
     if (window.jEpub) {
       resolve(window.jEpub);
       return;
     }
-    // jEpub depends on JSZip, ensure it's loaded first
-    loadJSZip().then(() => {
+    // jEpub depends on JSZip and EJS, ensure they're loaded first
+    Promise.all([loadJSZip(), loadEJS()]).then(() => {
       const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/jepub@3.0.0/dist/jepub.min.js';
+      script.src = 'https://unpkg.com/jepub/dist/jepub.js';
       script.onload = () => resolve(window.jEpub);
       script.onerror = () => reject(new Error('Failed to load jEpub'));
       document.head.appendChild(script);
@@ -2884,7 +2899,7 @@ const initExtension = () => {
     });
   }
 
-  console.log("Roam Filter Export extension loaded (v2.10.0)");
+  console.log("Roam Filter Export extension loaded (v2.14.2)");
 };
 
 const cleanupExtension = () => {

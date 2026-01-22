@@ -1,6 +1,12 @@
 # Changelog
 
-## [2.14.0] - 2026-01-22 00:40
+## [2.14.2] - 2026-01-22 01:13
+
+### Fixed
+- **EPUB export not working**: Fixed multiple issues preventing EPUB generation:
+  - Added missing **EJS** dependency (required by jEpub v2+)
+  - Updated jEpub CDN to use `unpkg` (official source)
+  - Fixed API initialization pattern
 
 ### Added
 - **EPUB export format**: New option to export as EPUB instead of Markdown
