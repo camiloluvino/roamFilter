@@ -1,12 +1,12 @@
 # Project Status - Roam Export Filter
 
-> **Última actualización**: 2026-01-19 02:53
+> **Última actualización**: 2026-01-22 00:42
 
 ---
 
 ## Versión actual
 
-**2.12.0** (2026-01-19 02:31)
+**2.14.0** (2026-01-22 00:40)
 
 ---
 
@@ -15,6 +15,7 @@
 | Funcionalidad | Estado | Notas |
 |---------------|--------|-------|
 | **Smart Export** | ✅ Estable | Modal unificado con pestañas "Por Filtros" y "Por Ramas" |
+| **EPUB Export** | 🆕 Nueva | Exporta a formato EPUB con opciones de estilo configurables |
 | **Smart Copy (Alt+Shift+C)** | ✅ Estable | Copia bloques visualmente seleccionados |
 | **Export by Root Blocks** | ✅ Estable | Exporta cada bloque raíz como archivo separado |
 | **Selector de profundidad** | ✅ Estable | Niveles 1-4 (default: 2) en pestaña "Por Ramas" |
@@ -25,6 +26,14 @@
 
 ## Historial reciente
 
+### v2.14.0 (2026-01-22 00:40)
+- Added: **Exportación EPUB** - Nueva opción de formato con selector Markdown/EPUB
+- Added: **Opciones de estilo EPUB** - Espaciado entre bloques, espaciado al cambiar nivel, indicador de niveles
+- Technical: Carga jEpub desde CDN, nuevas funciones treeToEpubHTML y downloadAsEpub
+
+### v2.13.0 (2026-01-19 14:29)
+- Added: **Orden descendente** - Opción para invertir prefijos de orden
+
 ### v2.12.0 (2026-01-19 02:31)
 - Added: **Toggle de prefijo de orden** - Checkbox opcional para agregar 01_, 02_... a archivos
 - Changed: Por defecto sin prefijo, usuario puede activarlo si necesita orden
@@ -32,24 +41,17 @@
 ### v2.11.1 (2026-01-19 00:59)
 - Fixed: **Indentación de ramas** - Ahora exporta solo rama + descendientes, sin ancestros
 
-### v2.11.0 (2026-01-19 00:43)
-- Added: **Un archivo por rama** - Cada rama seleccionada genera archivo separado
-- Added: ZIP automático si >5 ramas
-
-### v2.10.1 (2026-01-19 00:34)
-- Added: **Selector de profundidad** - Niveles 1-4 en pestaña "Por Ramas"
-- Changed: Modal más grande (800-1000px) para pantallas 1920x1080
-
 ---
 
 ## Problemas conocidos
 
-- [ ] `DEBUG = true` en línea ~386 — Cambiar a `false` antes de release de producción
+- [ ] `DEBUG = true` en línea ~404 — Cambiar a `false` antes de release de producción
 
 ---
 
 ## Próximos pasos
 
+- [x] ~~Implementar exportación EPUB~~
 - [ ] Considerar agregar "Export by Root Blocks" al modal unificado
 - [ ] Probar con páginas muy grandes (>100 bloques)
 

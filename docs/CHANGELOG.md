@@ -1,5 +1,41 @@
 # Changelog
 
+## [2.14.0] - 2026-01-22 00:40
+
+### Added
+- **EPUB export format**: New option to export as EPUB instead of Markdown
+  - Format selector (Markdown/EPUB) in the unified export modal
+  - Works with both "Por Filtros" and "Por Ramas" export modes
+  - In "Por Ramas" mode, all selected branches are combined into a single EPUB
+
+- **EPUB styling options**: Configurable options for better reading experience
+  - **Espaciado bloques**: Compact / Normal / Wide spacing between blocks
+  - **Al cambiar nivel**: None / Subtle / Marked spacing when hierarchy changes
+  - **Indicador niveles**: Indentation / Vertical line / Numbering for visual hierarchy
+
+### Technical
+- Added `loadJEpub()`: Loads jEpub library from CDN (depends on JSZip)
+- Added `treeToEpubHTML()`: Converts block tree to HTML with configurable styles
+- Added `downloadAsEpub()`: Generates and downloads EPUB file
+- Added `escapeHTML()`: Helper for safe HTML content
+- Modified `promptUnifiedExport()`: Added format selector and EPUB options panel
+- Modified `unifiedExport()`: Routes to EPUB or Markdown based on selection
+
+---
+
+## [2.13.0] - 2026-01-19 14:29
+
+### Added
+- **Descending order option**: New checkbox "Orden descendente (..., 02_, 01_)" under the order prefix option
+- When enabled, the first branch gets the highest number prefix instead of 01_
+- Useful when you want files sorted alphabetically to appear in reverse order compared to Roam
+
+### Technical
+- Checkbox is disabled until "Agregar prefijo de orden" is enabled
+- Added `useDescendingOrder` flag to export options
+
+---
+
 ## [2.12.0] - 2026-01-19 02:31
 
 ### Added

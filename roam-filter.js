@@ -1,6 +1,6 @@
 // Roam Filter Export - Smart Export for Filtered Blocks
-// Version: 2.12.0
-// Date: 2026-01-19 02:31
+// Version: 2.14.0
+// Date: 2026-01-22 00:40
 //
 // Created by Camilo Luvino
 // https://github.com/camiloluvino/roamExportFilter
@@ -24,6 +24,24 @@ const loadJSZip = () => {
     script.onload = () => resolve(window.JSZip);
     script.onerror = () => reject(new Error('Failed to load JSZip'));
     document.head.appendChild(script);
+  });
+};
+
+// Load jEpub from CDN for EPUB exports (depends on JSZip)
+const loadJEpub = () => {
+  return new Promise((resolve, reject) => {
+    if (window.jEpub) {
+      resolve(window.jEpub);
+      return;
+    }
+    // jEpub depends on JSZip, ensure it's loaded first
+    loadJSZip().then(() => {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/jepub@3.0.0/dist/jepub.min.js';
+      script.onload = () => resolve(window.jEpub);
+      script.onerror = () => reject(new Error('Failed to load jEpub'));
+      document.head.appendChild(script);
+    }).catch(reject);
   });
 };
 
@@ -690,6 +708,126 @@ const generateHeader = (tagName, blockCount) => {
 };
 
 // ============================================
+// EPUB EXPORT FUNCTIONS
+// ============================================
+
+// Helper to escape HTML special characters
+const escapeHTML = (str) => {
+  if (!str) return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+};
+
+// Convert tree to EPUB-compatible HTML with configurable styling
+const treeToEpubHTML = (trees, options = {}, level = 0) => {
+  if (!trees || trees.length === 0) return "";
+
+  const {
+    blockSpacing = 'normal',    // compact | normal | wide
+    levelSpacing = 'subtle',    // none | subtle | marked  
+    levelIndicator = 'indent'   // indent | line | number
+  } = options;
+
+  // Block spacing values (margin-bottom)
+  const blockMargins = { compact: '0.2em', normal: '0.5em', wide: '1em' };
+
+  // Level change spacing values (margin-top for nested lists)
+  const levelMargins = { none: '0', subtle: '0.3em', marked: '0.8em' };
+
+  // Get list style based on indicator type
+  const getListStyle = () => {
+    if (levelIndicator === 'line') {
+      return level > 0
+        ? 'border-left: 2px solid #ccc; padding-left: 1em; margin-left: 0.5em; list-style-type: none;'
+        : 'list-style-type: none;';
+    }
+    if (levelIndicator === 'number') {
+      return 'list-style-type: decimal;';
+    }
+    return 'list-style-type: disc;'; // indent default
+  };
+
+  const ulStyle = `
+    margin-left: ${level > 0 ? '1.5em' : '0'};
+    margin-top: ${level > 0 ? levelMargins[levelSpacing] : '0'};
+    padding-left: ${levelIndicator === 'line' ? '0' : '1.5em'};
+    ${getListStyle()}
+  `.replace(/\s+/g, ' ').trim();
+
+  const liStyle = `margin-bottom: ${blockMargins[blockSpacing]};`;
+
+  let html = `<ul style="${ulStyle}">`;
+
+  for (const node of trees) {
+    html += `<li style="${liStyle}">${escapeHTML(node.content)}`;
+
+    if (node.children && node.children.length > 0) {
+      html += treeToEpubHTML(node.children, options, level + 1);
+    }
+
+    html += '</li>';
+  }
+
+  html += '</ul>';
+  return html;
+};
+
+// Generate and download EPUB file
+const downloadAsEpub = async (tree, title, options = {}) => {
+  try {
+    await loadJEpub();
+
+    // Generate HTML content with styling options
+    const bodyContent = treeToEpubHTML(tree, options);
+
+    // Create book with jEpub
+    const book = new jEpub();
+    book.init({
+      title: title,
+      author: 'Roam Export',
+      publisher: 'Roam Export Filter',
+      description: `Exported from Roam Research on ${new Date().toLocaleDateString()}`
+    });
+
+    // Add base CSS
+    book.css(`
+      body { 
+        font-family: Georgia, serif; 
+        line-height: 1.7; 
+        text-align: justify;
+      }
+      ul { margin-bottom: 0.5em; }
+      li { line-height: 1.6; }
+    `);
+
+    // Add content as a single chapter
+    book.add(title, bodyContent);
+
+    // Generate and download
+    const blob = await book.generate('blob');
+    const safeTitle = title.replace(/[\/\\:*?"<>|]/g, '_').substring(0, 50);
+    const filename = `${safeTitle || 'export'}.epub`;
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    return true;
+  } catch (err) {
+    console.error('Error generating EPUB:', err);
+    return false;
+  }
+};
+
+// ============================================
 // MAIN EXTENSION LOGIC
 // ============================================
 
@@ -891,9 +1029,13 @@ const promptUnifiedExport = (pageName, pageUid) => {
             ${renderTree(structure)}
           </div>
           <div style="margin-top: 12px; padding: 12px; background: #f5f5f5; border-radius: 4px;">
-            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; margin-bottom: 12px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; margin-bottom: 8px;">
               <input type="checkbox" id="order-prefix-enabled">
               <span>Agregar prefijo de orden (01_, 02_, ...)</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; margin-bottom: 12px; padding-left: 24px; opacity: 0.5;" id="order-descending-label">
+              <input type="checkbox" id="order-descending" disabled>
+              <span>Orden descendente (..., 02_, 01_)</span>
             </label>
             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;">
               <input type="checkbox" id="branch-filter-enabled">
@@ -907,6 +1049,49 @@ const promptUnifiedExport = (pageName, pageUid) => {
           </div>
         </div>
         
+      </div>
+      
+      <!-- Format Options (above footer) -->
+      <div id="format-options-container" style="padding: 12px 20px; border-top: 1px solid #e0e0e0; background: #f9f9f9;">
+        <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 13px; color: #666;">Formato:</span>
+            <div id="format-selector" style="display: flex; border-radius: 4px; overflow: hidden;">
+              <button data-format="md" class="format-btn" style="padding: 6px 14px; font-size: 13px; border: 1px solid #137CBD; background: #137CBD; color: white; cursor: pointer;">Markdown</button>
+              <button data-format="epub" class="format-btn" style="padding: 6px 14px; font-size: 13px; border: 1px solid #ccc; border-left: none; background: white; color: #666; cursor: pointer;">EPUB</button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- EPUB Options Panel (hidden by default) -->
+        <div id="epub-options-panel" style="display: none; margin-top: 12px; padding: 12px; background: white; border: 1px solid #e0e0e0; border-radius: 4px;">
+          <div style="display: flex; flex-wrap: wrap; gap: 20px;">
+            <div>
+              <span style="font-size: 12px; color: #666; display: block; margin-bottom: 6px;">Espaciado bloques:</span>
+              <div id="block-spacing-selector" style="display: flex; border-radius: 4px; overflow: hidden;">
+                <button data-spacing="compact" style="padding: 4px 10px; font-size: 12px; border: 1px solid #ccc; background: white; color: #666; cursor: pointer; border-radius: 4px 0 0 4px;">Compacto</button>
+                <button data-spacing="normal" class="active" style="padding: 4px 10px; font-size: 12px; border: 1px solid #137CBD; border-left: none; background: #137CBD; color: white; cursor: pointer;">Normal</button>
+                <button data-spacing="wide" style="padding: 4px 10px; font-size: 12px; border: 1px solid #ccc; border-left: none; background: white; color: #666; cursor: pointer; border-radius: 0 4px 4px 0;">Amplio</button>
+              </div>
+            </div>
+            <div>
+              <span style="font-size: 12px; color: #666; display: block; margin-bottom: 6px;">Al cambiar nivel:</span>
+              <div id="level-spacing-selector" style="display: flex; border-radius: 4px; overflow: hidden;">
+                <button data-spacing="none" style="padding: 4px 10px; font-size: 12px; border: 1px solid #ccc; background: white; color: #666; cursor: pointer; border-radius: 4px 0 0 4px;">Ninguno</button>
+                <button data-spacing="subtle" class="active" style="padding: 4px 10px; font-size: 12px; border: 1px solid #137CBD; border-left: none; background: #137CBD; color: white; cursor: pointer;">Sutil</button>
+                <button data-spacing="marked" style="padding: 4px 10px; font-size: 12px; border: 1px solid #ccc; border-left: none; background: white; color: #666; cursor: pointer; border-radius: 0 4px 4px 0;">Marcado</button>
+              </div>
+            </div>
+            <div>
+              <span style="font-size: 12px; color: #666; display: block; margin-bottom: 6px;">Indicador niveles:</span>
+              <div id="level-indicator-selector" style="display: flex; border-radius: 4px; overflow: hidden;">
+                <button data-indicator="indent" class="active" style="padding: 4px 10px; font-size: 12px; border: 1px solid #137CBD; background: #137CBD; color: white; cursor: pointer; border-radius: 4px 0 0 4px;">Indentación</button>
+                <button data-indicator="line" style="padding: 4px 10px; font-size: 12px; border: 1px solid #ccc; border-left: none; background: white; color: #666; cursor: pointer;">Línea</button>
+                <button data-indicator="number" style="padding: 4px 10px; font-size: 12px; border: 1px solid #ccc; border-left: none; background: white; color: #666; cursor: pointer; border-radius: 0 4px 4px 0;">Numeración</button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
       
       <!-- Footer -->
@@ -937,13 +1122,28 @@ const promptUnifiedExport = (pageName, pageUid) => {
     const branchFilterEnabled = document.getElementById('branch-filter-enabled');
     const branchFilterTag = document.getElementById('branch-filter-tag');
     const orderPrefixEnabled = document.getElementById('order-prefix-enabled');
+    const orderDescending = document.getElementById('order-descending');
+    const orderDescendingLabel = document.getElementById('order-descending-label');
     const selectionInfo = document.getElementById('selection-info');
     const cancelBtn = document.getElementById('unified-cancel');
     const exportBtn = document.getElementById('unified-export');
     const treeContainer = document.getElementById('branch-tree-container');
     const favTagsContainer = document.getElementById('fav-tags-container');
 
+    // Format and EPUB options elements
+    const formatSelector = document.getElementById('format-selector');
+    const epubOptionsPanel = document.getElementById('epub-options-panel');
+    const blockSpacingSelector = document.getElementById('block-spacing-selector');
+    const levelSpacingSelector = document.getElementById('level-spacing-selector');
+    const levelIndicatorSelector = document.getElementById('level-indicator-selector');
+
     let activeTab = 'filters';
+    let selectedFormat = 'md'; // 'md' or 'epub'
+    let epubOptions = {
+      blockSpacing: 'normal',
+      levelSpacing: 'subtle',
+      levelIndicator: 'indent'
+    };
 
     // Tab switching
     const switchTab = (tab) => {
@@ -1035,6 +1235,15 @@ const promptUnifiedExport = (pageName, pageUid) => {
       });
     });
 
+    // Order prefix toggle - enables/disables descending option
+    orderPrefixEnabled.addEventListener('change', () => {
+      orderDescending.disabled = !orderPrefixEnabled.checked;
+      orderDescendingLabel.style.opacity = orderPrefixEnabled.checked ? '1' : '0.5';
+      if (!orderPrefixEnabled.checked) {
+        orderDescending.checked = false;
+      }
+    });
+
     // Branch filter toggle
     branchFilterEnabled.addEventListener('change', () => {
       branchFilterTag.disabled = !branchFilterEnabled.checked;
@@ -1043,6 +1252,65 @@ const promptUnifiedExport = (pageName, pageUid) => {
         branchFilterTag.focus();
       }
     });
+
+    // Format selector logic
+    const updateFormatButtonStyles = () => {
+      formatSelector.querySelectorAll('.format-btn').forEach(btn => {
+        const isActive = btn.dataset.format === selectedFormat;
+        btn.style.cssText = `
+          padding: 6px 14px;
+          font-size: 13px;
+          border: 1px solid ${isActive ? '#137CBD' : '#ccc'};
+          ${btn.dataset.format === 'epub' ? 'border-left: none;' : ''}
+          background: ${isActive ? '#137CBD' : 'white'};
+          color: ${isActive ? 'white' : '#666'};
+          cursor: pointer;
+        `;
+      });
+      // Show/hide EPUB options panel
+      epubOptionsPanel.style.display = selectedFormat === 'epub' ? 'block' : 'none';
+    };
+
+    formatSelector.querySelectorAll('.format-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        selectedFormat = btn.dataset.format;
+        updateFormatButtonStyles();
+      });
+    });
+
+    // EPUB options selector helper
+    const setupOptionSelector = (selector, optionKey, values) => {
+      const updateStyles = () => {
+        selector.querySelectorAll('button').forEach((btn, idx) => {
+          const value = btn.dataset.spacing || btn.dataset.indicator;
+          const isActive = epubOptions[optionKey] === value;
+          const isFirst = idx === 0;
+          const isLast = idx === selector.querySelectorAll('button').length - 1;
+          btn.style.cssText = `
+            padding: 4px 10px;
+            font-size: 12px;
+            border: 1px solid ${isActive ? '#137CBD' : '#ccc'};
+            ${!isFirst ? 'border-left: none;' : ''}
+            background: ${isActive ? '#137CBD' : 'white'};
+            color: ${isActive ? 'white' : '#666'};
+            cursor: pointer;
+            ${isFirst ? 'border-radius: 4px 0 0 4px;' : ''}
+            ${isLast ? 'border-radius: 0 4px 4px 0;' : ''}
+          `;
+        });
+      };
+
+      selector.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', () => {
+          epubOptions[optionKey] = btn.dataset.spacing || btn.dataset.indicator;
+          updateStyles();
+        });
+      });
+    };
+
+    setupOptionSelector(blockSpacingSelector, 'blockSpacing');
+    setupOptionSelector(levelSpacingSelector, 'levelSpacing');
+    setupOptionSelector(levelIndicatorSelector, 'levelIndicator');
 
     const cleanup = () => {
       document.body.removeChild(overlay);
@@ -1070,7 +1338,9 @@ const promptUnifiedExport = (pageName, pageUid) => {
         resolve({
           cancelled: false,
           mode: 'filters',
-          tagName: cleanTagInput(tagValue)
+          tagName: cleanTagInput(tagValue),
+          format: selectedFormat,
+          epubOptions: { ...epubOptions }
         });
       } else {
         const selectedUids = getSelectedBranchUids();
@@ -1084,7 +1354,10 @@ const promptUnifiedExport = (pageName, pageUid) => {
           mode: 'branches',
           selectedUids,
           filterTag: branchFilterEnabled.checked ? cleanTagInput(branchFilterTag.value) : null,
-          useOrderPrefix: orderPrefixEnabled.checked
+          useOrderPrefix: orderPrefixEnabled.checked,
+          useDescendingOrder: orderDescending.checked,
+          format: selectedFormat,
+          epubOptions: { ...epubOptions }
         });
       }
     });
@@ -1109,7 +1382,9 @@ const promptUnifiedExport = (pageName, pageUid) => {
         resolve({
           cancelled: false,
           mode: 'filters',
-          tagName: cleanTagInput(tagInput.value.trim())
+          tagName: cleanTagInput(tagInput.value.trim()),
+          format: selectedFormat,
+          epubOptions: { ...epubOptions }
         });
         document.removeEventListener('keydown', handleKeydown);
       }
@@ -1164,24 +1439,37 @@ const unifiedExport = async () => {
         return;
       }
 
-      const markdown = treeToMarkdown(exportTree);
-      const header = generateHeader(tagName, targetBlocks.length);
-      const filename = generateFilename(tagName);
+      // Export based on selected format
+      if (result.format === 'epub') {
+        showNotification(`📚 Generando EPUB...`, '#137CBD');
+        const success = await downloadAsEpub(exportTree, `${pageName} - ${tagName}`, result.epubOptions);
+        if (success) {
+          showNotification(`✓ EPUB exportado: ${targetBlocks.length} bloques`, '#28a745');
+        } else {
+          showNotification('❌ Error generando EPUB', '#DC143C');
+        }
+      } else {
+        // Markdown export (default)
+        const markdown = treeToMarkdown(exportTree);
+        const header = generateHeader(tagName, targetBlocks.length);
+        const filename = generateFilename(tagName);
 
-      const success = downloadFile(header + markdown, filename);
-      if (success) {
-        showNotification(`✓ Exported ${targetBlocks.length} blocks`, '#28a745');
+        const success = downloadFile(header + markdown, filename);
+        if (success) {
+          showNotification(`✓ Exported ${targetBlocks.length} blocks`, '#28a745');
+        }
       }
 
     } else if (result.mode === 'branches') {
-      // Export by branch selection - ONE FILE PER BRANCH
-      const { selectedUids, filterTag, useOrderPrefix } = result;
+      // Export by branch selection
+      const { selectedUids, filterTag, useOrderPrefix, useDescendingOrder, format, epubOptions } = result;
 
       showNotification(`📄 Procesando ${selectedUids.length} ramas...`, '#137CBD');
 
-      // Build files array - one per selected branch
-      const files = [];
-      let orderPrefix = 1;
+      // Collect branch trees
+      const branchTrees = [];
+      const totalForPrefix = selectedUids.length;
+      let orderIndex = 0;
 
       for (const uid of selectedUids) {
         try {
@@ -1212,12 +1500,48 @@ const unifiedExport = async () => {
 
           if (!branchTree) continue;
 
-          // Get the root content for filename
+          branchTrees.push({
+            tree: branchTree,
+            orderIndex: orderIndex
+          });
+
+          orderIndex++;
+        } catch (err) {
+          console.error(`Error processing branch ${uid}:`, err);
+        }
+      }
+
+      if (branchTrees.length === 0) {
+        const filterMsg = filterTag ? ` con tag #${filterTag}` : '';
+        showNotification(`❌ No se encontró contenido${filterMsg}`, '#DC143C');
+        return;
+      }
+
+      // Export based on format
+      if (format === 'epub') {
+        // EPUB: Combine all branches into a single EPUB
+        showNotification(`📚 Generando EPUB con ${branchTrees.length} ramas...`, '#137CBD');
+
+        // Build combined tree for EPUB
+        const combinedTree = branchTrees.map(b => b.tree);
+        const title = `${pageName}${filterTag ? ` - ${filterTag}` : ''}`;
+
+        const success = await downloadAsEpub(combinedTree, title, epubOptions);
+        if (success) {
+          showNotification(`✓ EPUB exportado: ${branchTrees.length} ramas`, '#28a745');
+        } else {
+          showNotification('❌ Error generando EPUB', '#DC143C');
+        }
+      } else {
+        // Markdown: One file per branch (existing behavior)
+        const files = [];
+
+        for (const { tree: branchTree, orderIndex: idx } of branchTrees) {
           const rootContent = branchTree.content || 'untitled';
-          const prefix = useOrderPrefix ? String(orderPrefix).padStart(2, '0') + '_' : '';
+          const prefixNumber = useDescendingOrder ? (totalForPrefix - idx) : (idx + 1);
+          const prefix = useOrderPrefix ? String(prefixNumber).padStart(2, '0') + '_' : '';
           const filename = prefix + generateRootFilename(rootContent);
 
-          // Generate markdown - tree is already in correct format
           const markdown = treeToMarkdown([branchTree]);
           const header = `# ${rootContent}\n> Generated: ${new Date().toLocaleString()}${filterTag ? `\n> Filter: #${filterTag}` : ''}\n\n---\n\n`;
 
@@ -1225,54 +1549,44 @@ const unifiedExport = async () => {
             filename,
             content: header + markdown
           });
-
-          orderPrefix++;
-        } catch (err) {
-          console.error(`Error processing branch ${uid}:`, err);
         }
-      }
 
-      if (files.length === 0) {
-        const filterMsg = filterTag ? ` con tag #${filterTag}` : '';
-        showNotification(`❌ No se encontró contenido${filterMsg}`, '#DC143C');
-        return;
-      }
-
-      // Download based on file count
-      if (files.length <= 5) {
-        // Individual downloads
-        for (const file of files) {
-          downloadFile(file.content, file.filename);
-        }
-        showNotification(`✓ Exportados ${files.length} archivos`, '#28a745');
-      } else {
-        // ZIP download
-        try {
-          const JSZip = await loadJSZip();
-          const zip = new JSZip();
-
+        // Download based on file count
+        if (files.length <= 5) {
+          // Individual downloads
           for (const file of files) {
-            zip.file(file.filename, file.content);
+            downloadFile(file.content, file.filename);
           }
+          showNotification(`✓ Exportados ${files.length} archivos`, '#28a745');
+        } else {
+          // ZIP download
+          try {
+            const JSZip = await loadJSZip();
+            const zip = new JSZip();
 
-          const date = new Date().toISOString().split('T')[0];
-          const safePageName = pageName.replace(/[\/\\:*?"<>|]/g, '_').substring(0, 30);
-          const zipFilename = `export_${safePageName}_${date}.zip`;
+            for (const file of files) {
+              zip.file(file.filename, file.content);
+            }
 
-          const blob = await zip.generateAsync({ type: 'blob' });
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = zipFilename;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
+            const date = new Date().toISOString().split('T')[0];
+            const safePageName = pageName.replace(/[\/\\:*?"<>|]/g, '_').substring(0, 30);
+            const zipFilename = `export_${safePageName}_${date}.zip`;
 
-          showNotification(`✓ Exportado ZIP con ${files.length} archivos`, '#28a745');
-        } catch (err) {
-          console.error('Error creating ZIP:', err);
-          showNotification('❌ Error creando ZIP', '#DC143C');
+            const blob = await zip.generateAsync({ type: 'blob' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = zipFilename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            showNotification(`✓ Exportado ZIP con ${files.length} archivos`, '#28a745');
+          } catch (err) {
+            console.error('Error creating ZIP:', err);
+            showNotification('❌ Error creando ZIP', '#DC143C');
+          }
         }
       }
     }
