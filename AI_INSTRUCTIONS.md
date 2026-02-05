@@ -25,21 +25,21 @@ s.src = 'https://camiloluvino.github.io/roamFilter/roam-filter.js';
 
 ```
 roamExportFilter/
+├── .internal/              ← Gestión del proyecto (STATUS, AI_INSTRUCTIONS)
 ├── docs/                   ← Documentación adicional (CHANGELOG)
 ├── tests/                  ← Suite de tests (tests.html)
 ├── reference/              ← Archivos de referencia (documentación Roam API)
 ├── roam-filter.js          ← ÚNICA FUENTE DE VERDAD
 ├── extension.json          ← Metadata del plugin (legacy)
 ├── README.md               ← Documentación usuario
-├── AI_INSTRUCTIONS.md      ← Este archivo (lee primero)
-└── STATUS.md               ← Estado actual del proyecto
+└── .gitignore              ← Archivos ignorados por Git
 ```
 
 ### Después de editar `roam-filter.js`:
 
 1. Actualiza la versión y fecha en las líneas 1-3 del archivo.
 2. Actualiza `docs/CHANGELOG.md` con los cambios realizados.
-3. Actualiza `STATUS.md` al final de la sesión.
+3. Actualiza `.internal/STATUS.md` al final de la sesión.
 4. Haz push a GitHub para que los cambios se reflejen en GitHub Pages.
 
 ---
