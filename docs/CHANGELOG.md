@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.16.0] - 2026-02-18 23:00
+
+### Added
+- **Sub-branch filtering**: "Por Ramas" export now supports content filtering WITHIN selected branches
+  - When a tag filter is applied (e.g., `#summary`), only the sub-blocks containing that tag (and their descendants) are exported
+  - Non-matching content is pruned from the export tree
+  - Useful for extracting specific sections (like "key takeaways" or "vocab") from multiple daily notes or meeting logs
+
+### Fixed
+- **Tag search depth**: Fixed an issue where tags nested deep in the hierarchy (>2 levels) were not found by the filter
+  - Replaced legacy Datalog query with recursive content-based tree inspection
+  - Now finds tags at any nesting level
+  - Improved validation accuracy in the unified export modal
+
+---
+
 ## [2.15.0] - 2026-02-18 21:40
 
 ### Fixed

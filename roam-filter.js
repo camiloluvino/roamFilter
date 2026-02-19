@@ -212,6 +212,46 @@ const buildTreeRecursively = (block) => {
   return node;
 };
 
+// Check if a tree node's content references a tag (by [[tag]], #tag, or tag::)
+const contentContainsTag = (content, tagName) => {
+  if (!content || !tagName) return false;
+  // Match [[tagName]], #tagName (word boundary), or tagName:: (attribute)
+  const escaped = tagName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(
+    `\\[\\[${escaped}\\]\\]|#${escaped}(?:\\b|$)|${escaped}::`,
+    'i'
+  );
+  return regex.test(content);
+};
+
+// Check if a tree node or any of its descendants contains the tag
+const treeContainsTag = (node, tagName) => {
+  if (!node) return false;
+  if (contentContainsTag(node.content, tagName)) return true;
+  if (node.children && node.children.length > 0) {
+    return node.children.some(child => treeContainsTag(child, tagName));
+  }
+  return false;
+};
+
+// Filter a branch tree to keep only children (sub-branches) that contain the tag.
+// The root node (branch header) is always kept; its children are pruned.
+// If a child doesn't directly have the tag but one of its descendants does,
+// the child is kept as a path to the tag.
+const filterTreeByTag = (tree, tagName) => {
+  if (!tree || !tagName) return tree;
+
+  // If the root itself has the tag, return the whole tree
+  if (contentContainsTag(tree.content, tagName)) return tree;
+
+  // Filter children: keep only those that contain the tag somewhere in their subtree
+  if (tree.children && tree.children.length > 0) {
+    tree.children = tree.children.filter(child => treeContainsTag(child, tagName));
+  }
+
+  return tree;
+};
+
 const transformBlock = (block) => {
   if (!block) return null;
 
@@ -1425,29 +1465,17 @@ const promptUnifiedExport = (pageName, pageUid) => {
           }
           validatedFilterTag = cleanTagInput(tagValue);
 
-          // Check that at least one selected branch contains the tag
+          // Check that at least one selected branch contains the tag (content-based)
           exportBtn.disabled = true;
           exportBtn.textContent = 'Verificando...';
           let hasMatches = false;
           try {
             for (const uid of selectedUids) {
-              const match = window.roamAlphaAPI.data.q(`
-                [:find ?match .
-                 :where
-                 [?tag :node/title "${validatedFilterTag}"]
-                 [?root :block/uid "${uid}"]
-                 (or
-                   [?root :block/refs ?tag]
-                   (and
-                     [?descendant :block/parents ?root]
-                     [?descendant :block/refs ?tag])
-                   (and
-                     [?descendant :block/parents ?ancestor]
-                     [?ancestor :block/parents ?root]
-                     [?descendant :block/refs ?tag]))
-                 [(identity ?root) ?match]]
-              `);
-              if (match) { hasMatches = true; break; }
+              const branchTree = getBlockWithDescendants(uid);
+              if (branchTree && treeContainsTag(branchTree, validatedFilterTag)) {
+                hasMatches = true;
+                break;
+              }
             }
           } catch (err) {
             console.error('Error validating filter tag:', err);
@@ -1588,32 +1616,19 @@ const unifiedExport = async () => {
 
       for (const uid of selectedUids) {
         try {
-          // If filter tag specified, check if this branch contains it
-          if (filterTag) {
-            const hasTag = window.roamAlphaAPI.data.q(`
-              [:find ?match .
-               :where
-               [?tag :node/title "${filterTag}"]
-               [?root :block/uid "${uid}"]
-               (or
-                 [?root :block/refs ?tag]
-                 (and
-                   [?descendant :block/parents ?root]
-                   [?descendant :block/refs ?tag])
-                 (and
-                   [?descendant :block/parents ?ancestor]
-                   [?ancestor :block/parents ?root]
-                   [?descendant :block/refs ?tag]))
-               [(identity ?root) ?match]]
-            `);
-
-            if (!hasTag) continue; // Skip branches without the tag
-          }
-
           // Get the branch with all its descendants (NO ancestors)
-          const branchTree = getBlockWithDescendants(uid);
+          let branchTree = getBlockWithDescendants(uid);
 
           if (!branchTree) continue;
+
+          // If filter tag specified, prune sub-branches that don't contain the tag
+          if (filterTag) {
+            branchTree = filterTreeByTag(branchTree, filterTag);
+            // Skip if no matching children remain (and root doesn't have the tag either)
+            if (!branchTree || (!branchTree.children || branchTree.children.length === 0) && !contentContainsTag(branchTree.content, filterTag)) {
+              continue;
+            }
+          }
 
           branchTrees.push({
             tree: branchTree,
@@ -2360,12 +2375,8 @@ const fetchBlocksForExport = (selectedUids, filterTag = null) => {
              (or
                [?root :block/refs ?tag]
                (and
-                 [?descendant :block/parents ?root]
-                 [?descendant :block/refs ?tag])
-               (and
-                 [?descendant :block/parents ?ancestor]
-                 [?ancestor :block/parents ?root]
-                 [?descendant :block/refs ?tag]))
+                 [?descendant :block/refs ?tag]
+                 [?descendant :block/parents ?root]))
              [(identity ?root) ?match]]
           `);
 
