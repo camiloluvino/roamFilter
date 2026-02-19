@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.15.0] - 2026-02-18 21:40
+
+### Fixed
+- **Filter not found closes modal**: When exporting branches with a tag filter that doesn't match any selected branch, the modal now stays open and shows an inline error message instead of closing and showing a brief notification
+- **Empty filter tag**: If the filter checkbox is enabled but the tag field is empty, the field highlights in red and the modal stays open
+
+### Added
+- **Select All / Deselect All**: Toggle button above the branch tree in "Por Ramas" tab
+  - Toggles between "☑ Seleccionar todo" and "☐ Deseleccionar todo"
+  - Updates correctly when depth changes or individual checkboxes are toggled
+
+### Technical
+- Filter tag validation (Datalog query) now runs inside the modal before closing, with "Verificando..." feedback on the export button
+- Added `updateSelectAllLabel()` function and `branch-filter-error` inline error container
+- Checkbox change listeners now also update the Select All button label
+
+---
+
 ## [2.14.4] - 2026-01-22 01:38
 
 ### Fixed

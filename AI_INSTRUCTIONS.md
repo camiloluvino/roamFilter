@@ -239,6 +239,15 @@ Roam y los browsers cachean scripts agresivamente. Después de hacer push:
 
 Un error fatal al cargar (ej: dependencia fallida) puede enmascarar errores en tiempo de ejecución (ej: API incorrecta). Al arreglar un error bloqueante, anticipar que el código subsecuente nunca se ejecutó y puede tener más errores.
 
+### Validación de UI
+- **No cerrar modal en error**: Validaciones críticas (como filtros vacíos o sin resultados) deben mostrarse *dentro* del modal. Cerrar el modal frustra al usuario.
+- **Feedback visual inmediato**: Limpiar estados de error (rojo) tan pronto el usuario interactúa para corregirlo (ej: evento `input`).
+
+### Event Listeners dinámicos
+- Al re-renderizar partes del DOM (ej: `treeContainer.innerHTML`), **todos los event listeners se pierden**.
+- Debes re-adjuntar los listeners inmediatamente después de asignar el `innerHTML`.
+- Si agregas un botón "Seleccionar todo", su estado y sus listeners deben actualizarse/re-adjuntarse cada vez que cambia la vista (ej: al cambiar profundidad).
+
 ---
 
 ## Referencias adicionales

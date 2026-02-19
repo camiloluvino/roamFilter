@@ -5,6 +5,7 @@ Plugin para Roam Research que exporta contenido filtrado usando consultas Datalo
 ## Características
 
 - **Smart Export**: Modal unificado con dos modos (por tag o por selección de ramas)
+- **Selección de Ramas**: Interfaz visual con botón "Seleccionar todo" y filtrado inteligente
 - **EPUB Export**: Exportación a formato EPUB con opciones de estilo
 - **Quick Copy (Alt+Shift+C)**: Copia bloques visualmente seleccionados
 - **ZIP automático**: Bundling cuando hay >5 archivos

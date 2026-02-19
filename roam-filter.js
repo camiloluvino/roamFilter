@@ -1,6 +1,6 @@
 // Roam Filter Export - Smart Export for Filtered Blocks
-// Version: 2.14.4
-// Date: 2026-01-22 01:38
+// Version: 2.15.0
+// Date: 2026-02-18 21:40
 //
 // Created by Camilo Luvino
 // https://github.com/camiloluvino/roamExportFilter
@@ -1033,9 +1033,22 @@ const promptUnifiedExport = (pageName, pageUid) => {
             <span style="font-size: 12px; color: #999;">niveles de jerarquía</span>
           </div>
           
-          <p style="margin: 0 0 12px 0; font-size: 14px; color: #666;">
-            Selecciona las ramas que deseas exportar:
-          </p>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+            <p style="margin: 0; font-size: 14px; color: #666;">
+              Selecciona las ramas que deseas exportar:
+            </p>
+            <button id="select-all-branches" style="
+              padding: 4px 12px;
+              font-size: 12px;
+              border: 1px solid #137CBD;
+              border-radius: 4px;
+              background: white;
+              color: #137CBD;
+              cursor: pointer;
+              transition: all 0.2s;
+            ">☑ Seleccionar todo</button>
+          </div>
+          <div id="branch-filter-error" style="display: none; padding: 8px 12px; margin-bottom: 8px; background: #fff3f3; border: 1px solid #DC143C; border-radius: 4px; color: #DC143C; font-size: 13px;"></div>
           <div id="branch-tree-container" style="
             border: 1px solid #e0e0e0;
             border-radius: 4px;
@@ -1217,10 +1230,11 @@ const promptUnifiedExport = (pageName, pageUid) => {
 
       // Re-attach checkbox listeners
       treeContainer.querySelectorAll('.branch-checkbox').forEach(cb => {
-        cb.addEventListener('change', updateBranchCount);
+        cb.addEventListener('change', () => { updateBranchCount(); updateSelectAllLabel(); });
       });
 
       updateBranchCount();
+      updateSelectAllLabel();
     };
 
     depthSelector.querySelectorAll('button').forEach(btn => {
@@ -1234,9 +1248,29 @@ const promptUnifiedExport = (pageName, pageUid) => {
       selectionInfo.textContent = `${count} rama${count !== 1 ? 's' : ''} seleccionada${count !== 1 ? 's' : ''}`;
     };
 
+    // Select All / Deselect All logic
+    const selectAllBtn = document.getElementById('select-all-branches');
+    const filterErrorDiv = document.getElementById('branch-filter-error');
+
+    const updateSelectAllLabel = () => {
+      const allCheckboxes = treeContainer.querySelectorAll('.branch-checkbox');
+      const checkedBoxes = treeContainer.querySelectorAll('.branch-checkbox:checked');
+      const allSelected = allCheckboxes.length > 0 && allCheckboxes.length === checkedBoxes.length;
+      selectAllBtn.textContent = allSelected ? '☐ Deseleccionar todo' : '☑ Seleccionar todo';
+    };
+
+    selectAllBtn.addEventListener('click', () => {
+      const allCheckboxes = treeContainer.querySelectorAll('.branch-checkbox');
+      const checkedBoxes = treeContainer.querySelectorAll('.branch-checkbox:checked');
+      const shouldSelect = checkedBoxes.length < allCheckboxes.length;
+      allCheckboxes.forEach(cb => { cb.checked = shouldSelect; });
+      updateBranchCount();
+      updateSelectAllLabel();
+    });
+
     // Add event listeners to branch checkboxes
     treeContainer.querySelectorAll('.branch-checkbox').forEach(cb => {
-      cb.addEventListener('change', updateBranchCount);
+      cb.addEventListener('change', () => { updateBranchCount(); updateSelectAllLabel(); });
     });
 
     // Favorite tags click
@@ -1268,7 +1302,17 @@ const promptUnifiedExport = (pageName, pageUid) => {
       branchFilterTag.style.opacity = branchFilterEnabled.checked ? '1' : '0.5';
       if (branchFilterEnabled.checked) {
         branchFilterTag.focus();
+      } else {
+        // Clear error state when disabling filter
+        filterErrorDiv.style.display = 'none';
+        branchFilterTag.style.borderColor = '#ccc';
       }
+    });
+
+    // Clear error state when user types in filter tag
+    branchFilterTag.addEventListener('input', () => {
+      filterErrorDiv.style.display = 'none';
+      branchFilterTag.style.borderColor = '#ccc';
     });
 
     // Format selector logic
@@ -1366,12 +1410,65 @@ const promptUnifiedExport = (pageName, pageUid) => {
           alert('Por favor selecciona al menos una rama para exportar.');
           return;
         }
+
+        // Hide any previous error
+        filterErrorDiv.style.display = 'none';
+
+        // Validate filterTag BEFORE closing modal
+        let validatedFilterTag = null;
+        if (branchFilterEnabled.checked) {
+          const tagValue = branchFilterTag.value.trim();
+          if (!tagValue) {
+            branchFilterTag.style.borderColor = '#DC143C';
+            branchFilterTag.focus();
+            return; // Don't close modal
+          }
+          validatedFilterTag = cleanTagInput(tagValue);
+
+          // Check that at least one selected branch contains the tag
+          exportBtn.disabled = true;
+          exportBtn.textContent = 'Verificando...';
+          let hasMatches = false;
+          try {
+            for (const uid of selectedUids) {
+              const match = window.roamAlphaAPI.data.q(`
+                [:find ?match .
+                 :where
+                 [?tag :node/title "${validatedFilterTag}"]
+                 [?root :block/uid "${uid}"]
+                 (or
+                   [?root :block/refs ?tag]
+                   (and
+                     [?descendant :block/parents ?root]
+                     [?descendant :block/refs ?tag])
+                   (and
+                     [?descendant :block/parents ?ancestor]
+                     [?ancestor :block/parents ?root]
+                     [?descendant :block/refs ?tag]))
+                 [(identity ?root) ?match]]
+              `);
+              if (match) { hasMatches = true; break; }
+            }
+          } catch (err) {
+            console.error('Error validating filter tag:', err);
+          }
+          exportBtn.disabled = false;
+          exportBtn.textContent = 'Exportar';
+
+          if (!hasMatches) {
+            filterErrorDiv.textContent = `❌ No se encontró #${validatedFilterTag} en las ${selectedUids.length} rama${selectedUids.length !== 1 ? 's' : ''} seleccionada${selectedUids.length !== 1 ? 's' : ''}`;
+            filterErrorDiv.style.display = 'block';
+            branchFilterTag.style.borderColor = '#DC143C';
+            return; // Don't close modal
+          }
+        }
+
         cleanup();
         resolve({
           cancelled: false,
           mode: 'branches',
           selectedUids,
-          filterTag: branchFilterEnabled.checked ? cleanTagInput(branchFilterTag.value) : null,
+          filterTag: validatedFilterTag,
           useOrderPrefix: orderPrefixEnabled.checked,
           useDescendingOrder: orderDescending.checked,
           format: selectedFormat,
