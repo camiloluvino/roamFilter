@@ -1,5 +1,38 @@
 # Changelog
 
+## [2.18.0] - 2026-02-20 15:35
+
+### Added
+- **Buscador de Páginas Universal**: El tab "📄 Por Páginas" ahora es **siempre visible** y cuenta con un buscador para añadir cualquier página del grafo a la lista de exportación.
+- **Soporte para Daily Notes**: Se corrigió error que impedía abrir el modal desde la vista principal de Daily Notes (`#/app/{graph-name}`).
+- **Rediseño de Tabs**: Los tabs ahora están agrupados visualmente bajo etiquetas superiores ("📍 Esta página" y "📑 Múltiples páginas") con un separador claro.
+- **Visibilidad inteligente**: El nombre de la página se oculta automáticamente al activar el tab "Por Páginas" para evitar confusión en contexto multi-página.
+
+### Technical
+- Added `searchPages(searchTerm)`: Nueva función para búsqueda parcial de títulos en el grafo usando Datalog.
+- Added Daily Notes fallback in `getCurrentPageUid()` using date formatting and reverse-lookup.
+- Refactored `promptUnifiedExport()` to remove `hasChildPages` requirement for the Pages tab.
+- Added `page-name-display` ID and toggle logic in `switchTab()`.
+
+## [2.17.0] - 2026-02-20 14:40
+
+### Added
+- **Export por Páginas (Initial)**: New "📄 Por Páginas" tab in the Smart Export modal for namespace child pages.
+- **camelCase filename generation**: Page titles like `entrevista/real/María Paz` become `entrevistaReal_MariaPaz.epub`.
+- **ZIP bundling for Pages**: Automatic bundling when exporting multiple pages.
+
+### Technical
+- Added `getChildPages(pageName)`: Queries all pages, filters by namespace prefix in JavaScript
+- Added `generatePageFilename(fullTitle)`: Converts slash-separated page titles to camelCase with `_` separator, removes diacritics
+- Added `generateEpubBlob(tree, title, options)`: Extracted from `downloadAsEpub` to generate EPUB blob without immediate download (enables ZIP packaging)
+- Added `downloadBlob(blob, filename)`: Generic blob download helper
+- Modified `findBlocksByTag(tagName, targetPageUid)`: Now accepts optional `targetPageUid` parameter to query any page (not just current)
+- Modified `downloadAsEpub()`: Now uses `generateEpubBlob` + `downloadBlob` internally
+- Modified `promptUnifiedExport()`: Added conditional 3rd tab with group labels, page list rendering, and pages-specific event listeners
+- Modified `unifiedExport()`: Added `mode === 'pages'` branch with per-page tree building, format selection, and ZIP packaging
+
+---
+
 ## [2.16.0] - 2026-02-18 23:00
 
 ### Added

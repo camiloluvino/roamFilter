@@ -1,12 +1,12 @@
 # Project Status - Roam Export Filter
 
-> **Última actualización**: 2026-01-22 10:33
+> **Última actualización**: 2026-02-20 15:35
 
 ---
 
 ## Versión actual
 
-**2.14.4** (2026-01-22 01:38)
+**2.18.0** (2026-02-20 15:35)
 
 ---
 
@@ -14,7 +14,7 @@
 
 | Funcionalidad | Estado | Notas |
 |---------------|--------|-------|
-| **Smart Export** | ✅ Estable | Modal unificado con pestañas |
+| **Smart Export** | ✅ Estable | Modal unificado con 3 pestañas y buscador de páginas |
 | **EPUB Export** | 🆕 Nueva | Exporta a formato EPUB con opciones de estilo |
 | **Smart Copy (Alt+Shift+C)** | ✅ Estable | Copia bloques visualmente seleccionados |
 | **Export by Root Blocks** | ✅ Estable | Exporta cada bloque raíz como archivo separado |

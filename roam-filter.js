@@ -1,6 +1,6 @@
 // Roam Filter Export - Smart Export for Filtered Blocks
-// Version: 2.15.0
-// Date: 2026-02-18 21:40
+// Version: 2.18.0
+// Date: 2026-02-20 15:35
 //
 // Created by Camilo Luvino
 // https://github.com/camiloluvino/roamExportFilter
@@ -99,16 +99,38 @@ const getCurrentPageUid = () => {
     return result || null;
   }
 
+  // Fallback for daily notes view (URL has no /page/ — just #/app/{graph-name})
+  // When on the main view, Roam shows today's daily note
+  const appMatch = window.location.hash.match(/^#\/app\/[^/]+\/?$/);
+  if (appMatch) {
+    const today = new Date();
+    const months = ['January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'];
+    const d = today.getDate();
+    const suffix = (d % 10 === 1 && d !== 11) ? 'st'
+      : (d % 10 === 2 && d !== 12) ? 'nd'
+        : (d % 10 === 3 && d !== 13) ? 'rd' : 'th';
+    const roamDateTitle = `${months[today.getMonth()]} ${d}${suffix}, ${today.getFullYear()}`;
+    const result = window.roamAlphaAPI.data.q(`
+      [:find ?uid .
+       :where
+       [?page :node/title "${roamDateTitle}"]
+       [?page :block/uid ?uid]]
+    `);
+    if (DEBUG) console.log('Daily notes fallback — looking for:', roamDateTitle, '→ uid:', result);
+    return result || null;
+  }
+
   return null;
 };
 
-const findBlocksByTag = (tagName) => {
+const findBlocksByTag = (tagName, targetPageUid = null) => {
   if (!isRoamAPIAvailable()) {
     console.error("Roam API is not available");
     return [];
   }
 
-  const pageUid = getCurrentPageUid();
+  const pageUid = targetPageUid || getCurrentPageUid();
   if (!pageUid) {
     console.error("Could not determine current page UID");
     return [];
@@ -140,6 +162,81 @@ const findBlocksByTag = (tagName) => {
     return results.map(r => r[0]).filter(Boolean);
   } catch (err) {
     console.error("Error in findBlocksByTag:", err);
+    return [];
+  }
+};
+
+// Get child pages under a namespace (e.g., "entrevista/real" finds "entrevista/real/María Paz")
+const getChildPages = (pageName) => {
+  if (!isRoamAPIAvailable() || !pageName) {
+    return [];
+  }
+
+  try {
+    // Find all pages whose title starts with "pageName/"
+    const prefix = `${pageName}/`;
+    const results = window.roamAlphaAPI.data.q(`
+      [:find ?title ?uid
+       :where
+       [?page :node/title ?title]
+       [?page :block/uid ?uid]]
+    `);
+
+    if (!results || results.length === 0) {
+      return [];
+    }
+
+    // Filter in JavaScript (more reliable than clojure.string/starts-with?)
+    const childPages = results
+      .filter(r => r[0] && r[0].startsWith(prefix))
+      // Only direct children (no deeper nesting like entrevista/real/X/Y)
+      .filter(r => !r[0].substring(prefix.length).includes('/'))
+      .map(r => ({
+        title: r[0],
+        uid: r[1],
+        shortName: r[0].substring(prefix.length)
+      }))
+      .sort((a, b) => a.shortName.localeCompare(b.shortName));
+
+    if (DEBUG) console.log(`Found ${childPages.length} child pages under "${pageName}"`, childPages);
+    return childPages;
+  } catch (err) {
+    console.error('Error in getChildPages:', err);
+    return [];
+  }
+};
+
+// Search pages by partial title match (for "Por Páginas" tab)
+const searchPages = (searchTerm) => {
+  if (!isRoamAPIAvailable() || !searchTerm || searchTerm.length < 2) {
+    return [];
+  }
+
+  try {
+    const results = window.roamAlphaAPI.data.q(`
+      [:find ?title ?uid
+       :where
+       [?page :node/title ?title]
+       [?page :block/uid ?uid]]
+    `);
+
+    if (!results || results.length === 0) return [];
+
+    const term = searchTerm.toLowerCase();
+    return results
+      .filter(r => r[0] && r[0].toLowerCase().includes(term))
+      // Exclude daily notes (e.g., "February 20th, 2026") and system pages
+      .filter(r => !r[0].match(/^(January|February|March|April|May|June|July|August|September|October|November|December)\s\d/))
+      .filter(r => !r[0].startsWith('roam/'))
+      .map(r => ({
+        title: r[0],
+        uid: r[1],
+        shortName: r[0]
+      }))
+      .sort((a, b) => a.title.localeCompare(b.title))
+      .slice(0, 50);
+  } catch (err) {
+    console.error('Error in searchPages:', err);
     return [];
   }
 };
@@ -455,6 +552,24 @@ const generateRootFilename = (blockContent) => {
   return `${safe || 'untitled'}.md`;
 };
 
+// Generate camelCase filename from page title with namespace
+// "entrevista/real/María Paz" → "entrevistaReal_mariaPaz"
+const generatePageFilename = (fullTitle) => {
+  if (!fullTitle) return 'untitled';
+  return fullTitle.split('/').map((segment, i) => {
+    const clean = segment.trim()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove diacritics
+      .replace(/[^a-zA-Z0-9\s]/g, '')                  // only alphanumeric + spaces
+      .trim();
+    if (!clean) return 'untitled';
+    const words = clean.split(/\s+/);
+    // camelCase: first word of first segment all lowercase, rest capitalized
+    return words.map((w, j) =>
+      (i === 0 && j === 0) ? w.toLowerCase() : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
+    ).join('');
+  }).join('_');
+};
+
 // --- tree-builder.js ---
 const DEBUG = true; // Set to false in production
 
@@ -751,6 +866,27 @@ const downloadFile = (content, filename) => {
   }
 };
 
+// Download a blob directly (for EPUB files)
+const downloadBlob = (blob, filename) => {
+  try {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }, 100);
+    return true;
+  } catch (err) {
+    console.error('Error downloading blob:', err);
+    return false;
+  }
+};
+
 const generateHeader = (tagName, blockCount) => {
   const date = new Date().toLocaleString();
   return `# Export: #${tagName}
@@ -830,55 +966,43 @@ const treeToEpubHTML = (trees, options = {}, level = 0) => {
   return html;
 };
 
+// Generate EPUB blob without downloading (for ZIP packaging)
+const generateEpubBlob = async (tree, title, options = {}) => {
+  await loadJEpub();
+
+  const bodyContent = treeToEpubHTML(tree, options);
+
+  const book = new jEpub();
+  book.init({
+    title: title,
+    author: 'Roam Export',
+    publisher: 'Roam Export Filter',
+    description: `Exported from Roam Research on ${new Date().toLocaleDateString()}`
+  });
+
+  const css = `
+    <style>
+      body { 
+        font-family: Georgia, serif; 
+        line-height: 1.7; 
+        text-align: justify;
+      }
+      ul { margin-bottom: 0.5em; }
+      li { line-height: 1.6; }
+    </style>
+  `;
+
+  book.add(title, css + bodyContent);
+  return await book.generate('blob');
+};
+
 // Generate and download EPUB file
 const downloadAsEpub = async (tree, title, options = {}) => {
   try {
-    await loadJEpub();
-
-    // Generate HTML content with styling options
-    const bodyContent = treeToEpubHTML(tree, options);
-
-    // Create book with jEpub
-    const book = new jEpub();
-    book.init({
-      title: title,
-      author: 'Roam Export',
-      publisher: 'Roam Export Filter',
-      description: `Exported from Roam Research on ${new Date().toLocaleDateString()}`
-    });
-
-    // Add base CSS
-    // Inject CSS directly into HTML content (jEpub doesn't have a css method)
-    const css = `
-      <style>
-        body { 
-          font-family: Georgia, serif; 
-          line-height: 1.7; 
-          text-align: justify;
-        }
-        ul { margin-bottom: 0.5em; }
-        li { line-height: 1.6; }
-      </style>
-    `;
-
-    // Add content as a single chapter with CSS
-    book.add(title, css + bodyContent);
-
-    // Generate and download
-    const blob = await book.generate('blob');
+    const blob = await generateEpubBlob(tree, title, options);
     const safeTitle = title.replace(/[\/\\:*?"<>|]/g, '_').substring(0, 50);
     const filename = `${safeTitle || 'export'}.epub`;
-
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-
-    return true;
+    return downloadBlob(blob, filename);
   } catch (err) {
     console.error('Error generating EPUB:', err);
     return false;
@@ -1032,13 +1156,46 @@ const promptUnifiedExport = (pageName, pageUid) => {
     // Get initial structure with default depth
     let structure = getPageStructure(pageUid, currentDepth);
 
+    // Detect child pages for namespace tab (pre-loaded suggestions)
+    const childPages = getChildPages(pageName);
+
+    // Render pages list for "Por Páginas" tab
+    const renderPagesList = (pages) => {
+      if (!pages || pages.length === 0) return '<p style="color: #888; padding: 12px;">Busca páginas para agregar a la lista</p>';
+      return pages.map(page => `
+        <div style="padding: 5px 0;">
+          <label style="display: flex; align-items: center; cursor: pointer; gap: 8px;">
+            <input type="checkbox" data-uid="${page.uid}" data-title="${page.title.replace(/"/g, '&quot;')}" data-short="${page.shortName.replace(/"/g, '&quot;')}" class="page-checkbox" style="cursor: pointer; min-width: 16px;">
+            <span style="font-size: 14px; line-height: 1.5;">📄 ${page.shortName}</span>
+          </label>
+        </div>
+      `).join('');
+    };
+
     modal.innerHTML = `
-      <!-- Header with tabs -->
-      <div style="display: flex; background: #f5f5f5; border-bottom: 1px solid #e0e0e0;">
-        <button id="tab-filters" style="${tabStyle(true)}">📋 Por Filtros</button>
-        <button id="tab-branches" style="${tabStyle(false)}">🌳 Por Ramas</button>
-        <div style="flex: 1;"></div>
-        <span style="padding: 12px 16px; font-size: 12px; color: #888;">${pageName}</span>
+      <!-- Header with tabs and group labels -->
+      <div style="background: #f5f5f5; border-bottom: 1px solid #e0e0e0;">
+        <div style="display: flex; align-items: flex-end;">
+          <!-- "Esta página" group -->
+          <div style="flex: 0 0 auto;">
+            <div style="font-size: 11px; color: #999; padding: 6px 12px 2px 12px; text-align: center;">📍 Esta página</div>
+            <div style="display: flex;">
+              <button id="tab-filters" style="${tabStyle(true)}">📋 Por Filtros</button>
+              <button id="tab-branches" style="${tabStyle(false)}">🌳 Por Ramas</button>
+            </div>
+          </div>
+          <!-- Separator -->
+          <div style="border-left: 2px solid #ddd; align-self: stretch; margin: 6px 0;"></div>
+          <!-- "Múltiples páginas" group -->
+          <div style="flex: 0 0 auto;">
+            <div style="font-size: 11px; color: #999; padding: 6px 12px 2px 12px; text-align: center;">📑 Múltiples páginas</div>
+            <div style="display: flex;">
+              <button id="tab-pages" style="${tabStyle(false)}">📄 Por Páginas</button>
+            </div>
+          </div>
+          <div style="flex: 1;"></div>
+          <span id="page-name-display" style="padding: 12px 16px; font-size: 12px; color: #888; align-self: center;">${pageName}</span>
+        </div>
       </div>
       
       <!-- Tab content container -->
@@ -1120,6 +1277,65 @@ const promptUnifiedExport = (pageName, pageUid) => {
           </div>
         </div>
         
+        <!-- Por Páginas content -->
+        <div id="content-pages" style="display: none;">
+          <!-- Search bar -->
+          <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <input type="text" id="page-search-input" 
+              style="flex: 1; padding: 10px 14px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;"
+              placeholder="🔍 Buscar páginas por nombre..."
+            />
+            <button id="page-search-btn" style="
+              padding: 10px 16px;
+              font-size: 13px;
+              border: 1px solid #137CBD;
+              border-radius: 4px;
+              background: #137CBD;
+              color: white;
+              cursor: pointer;
+              transition: all 0.2s;
+              white-space: nowrap;
+            ">Buscar</button>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+            <p style="margin: 0; font-size: 14px; color: #666;">
+              Selecciona las páginas que deseas exportar:
+            </p>
+            <button id="select-all-pages" style="
+              padding: 4px 12px;
+              font-size: 12px;
+              border: 1px solid #137CBD;
+              border-radius: 4px;
+              background: white;
+              color: #137CBD;
+              cursor: pointer;
+              transition: all 0.2s;
+            ">☑ Seleccionar todo</button>
+          </div>
+          <div id="page-filter-error" style="display: none; padding: 8px 12px; margin-bottom: 8px; background: #fff3f3; border: 1px solid #DC143C; border-radius: 4px; color: #DC143C; font-size: 13px;"></div>
+          <div id="pages-list-container" style="
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            padding: 12px;
+            max-height: 350px;
+            overflow-y: auto;
+            background: #fafafa;
+          ">
+            ${renderPagesList(childPages)}
+          </div>
+          <div style="margin-top: 12px; padding: 12px; background: #f5f5f5; border-radius: 4px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;">
+              <input type="checkbox" id="page-filter-enabled">
+              <span>Filtrar por tag (opcional):</span>
+            </label>
+            <input type="text" id="page-filter-tag" 
+              style="width: 100%; padding: 8px 12px; font-size: 13px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; margin-top: 8px; opacity: 0.5;"
+              placeholder="Ej: #resumen"
+              disabled
+            />
+          </div>
+        </div>
+
       </div>
       
       <!-- Format Options (above footer) -->
@@ -1187,8 +1403,10 @@ const promptUnifiedExport = (pageName, pageUid) => {
     // Get elements
     const tabFilters = document.getElementById('tab-filters');
     const tabBranches = document.getElementById('tab-branches');
+    const tabPages = document.getElementById('tab-pages');
     const contentFilters = document.getElementById('content-filters');
     const contentBranches = document.getElementById('content-branches');
+    const contentPages = document.getElementById('content-pages');
     const tagInput = document.getElementById('unified-tag-input');
     const branchFilterEnabled = document.getElementById('branch-filter-enabled');
     const branchFilterTag = document.getElementById('branch-filter-tag');
@@ -1200,6 +1418,14 @@ const promptUnifiedExport = (pageName, pageUid) => {
     const exportBtn = document.getElementById('unified-export');
     const treeContainer = document.getElementById('branch-tree-container');
     const favTagsContainer = document.getElementById('fav-tags-container');
+
+    // Pages tab elements
+    const pagesListContainer = document.getElementById('pages-list-container');
+    const pageFilterEnabled = document.getElementById('page-filter-enabled');
+    const pageFilterTag = document.getElementById('page-filter-tag');
+    const pageFilterErrorDiv = document.getElementById('page-filter-error');
+    const pageSearchInput = document.getElementById('page-search-input');
+    const pageSearchBtn = document.getElementById('page-search-btn');
 
     // Format and EPUB options elements
     const formatSelector = document.getElementById('format-selector');
@@ -1217,26 +1443,39 @@ const promptUnifiedExport = (pageName, pageUid) => {
     };
 
     // Tab switching
+    const pageNameDisplay = document.getElementById('page-name-display');
     const switchTab = (tab) => {
       activeTab = tab;
+      // Reset all tabs
+      tabFilters.style.cssText = tabStyle(false);
+      tabBranches.style.cssText = tabStyle(false);
+      tabPages.style.cssText = tabStyle(false);
+      contentFilters.style.display = 'none';
+      contentBranches.style.display = 'none';
+      contentPages.style.display = 'none';
+      selectionInfo.textContent = '';
+
       if (tab === 'filters') {
         tabFilters.style.cssText = tabStyle(true);
-        tabBranches.style.cssText = tabStyle(false);
         contentFilters.style.display = 'block';
-        contentBranches.style.display = 'none';
-        selectionInfo.textContent = '';
+        pageNameDisplay.style.display = '';
         tagInput.focus();
-      } else {
-        tabFilters.style.cssText = tabStyle(false);
+      } else if (tab === 'branches') {
         tabBranches.style.cssText = tabStyle(true);
-        contentFilters.style.display = 'none';
         contentBranches.style.display = 'block';
+        pageNameDisplay.style.display = '';
         updateBranchCount();
+      } else if (tab === 'pages') {
+        tabPages.style.cssText = tabStyle(true);
+        contentPages.style.display = 'block';
+        pageNameDisplay.style.display = 'none';
+        if (window._updatePageCount) window._updatePageCount();
       }
     };
 
     tabFilters.addEventListener('click', () => switchTab('filters'));
     tabBranches.addEventListener('click', () => switchTab('branches'));
+    tabPages.addEventListener('click', () => switchTab('pages'));
 
     // Depth selector logic
     const depthSelector = document.getElementById('depth-selector');
@@ -1355,6 +1594,127 @@ const promptUnifiedExport = (pageName, pageUid) => {
       branchFilterTag.style.borderColor = '#ccc';
     });
 
+    // === Pages tab event listeners ===
+    // Update page selection count
+    const updatePageCount = () => {
+      const checked = pagesListContainer.querySelectorAll('.page-checkbox:checked');
+      const count = checked.length;
+      selectionInfo.textContent = `${count} página${count !== 1 ? 's' : ''} seleccionada${count !== 1 ? 's' : ''}`;
+    };
+
+    // Select All / Deselect All for pages
+    const selectAllPagesBtn = document.getElementById('select-all-pages');
+    const updateSelectAllPagesLabel = () => {
+      const allCheckboxes = pagesListContainer.querySelectorAll('.page-checkbox');
+      const checkedBoxes = pagesListContainer.querySelectorAll('.page-checkbox:checked');
+      const allSelected = allCheckboxes.length > 0 && allCheckboxes.length === checkedBoxes.length;
+      selectAllPagesBtn.textContent = allSelected ? '☐ Deseleccionar todo' : '☑ Seleccionar todo';
+    };
+
+    selectAllPagesBtn.addEventListener('click', () => {
+      const allCheckboxes = pagesListContainer.querySelectorAll('.page-checkbox');
+      const checkedBoxes = pagesListContainer.querySelectorAll('.page-checkbox:checked');
+      const shouldSelect = checkedBoxes.length < allCheckboxes.length;
+      allCheckboxes.forEach(cb => { cb.checked = shouldSelect; });
+      updatePageCount();
+      updateSelectAllPagesLabel();
+    });
+
+    // Helper to attach checkbox listeners for pages
+    const attachPageCheckboxListeners = () => {
+      pagesListContainer.querySelectorAll('.page-checkbox').forEach(cb => {
+        cb.addEventListener('change', () => { updatePageCount(); updateSelectAllPagesLabel(); });
+      });
+    };
+    attachPageCheckboxListeners(); // Attach for initial child pages (if any)
+
+    // Page search functionality
+    const doPageSearch = () => {
+      const searchTerm = pageSearchInput.value.trim();
+      if (searchTerm.length < 2) {
+        pageFilterErrorDiv.textContent = '⚠ Escribe al menos 2 caracteres para buscar';
+        pageFilterErrorDiv.style.display = 'block';
+        pageFilterErrorDiv.style.background = '#fff8e6';
+        pageFilterErrorDiv.style.borderColor = '#e6a817';
+        pageFilterErrorDiv.style.color = '#996600';
+        return;
+      }
+      pageFilterErrorDiv.style.display = 'none';
+
+      // Remember currently checked pages
+      const checkedUids = new Set();
+      pagesListContainer.querySelectorAll('.page-checkbox:checked').forEach(cb => {
+        checkedUids.add(cb.dataset.uid);
+      });
+
+      const results = searchPages(searchTerm);
+      if (results.length === 0) {
+        pagesListContainer.innerHTML = '<p style="color: #888; padding: 12px;">No se encontraron páginas</p>';
+        return;
+      }
+
+      // Merge: keep checked pages at top, add new results
+      const seenUids = new Set();
+      let mergedPages = [];
+
+      // First add previously checked pages that are still relevant
+      pagesListContainer.querySelectorAll('.page-checkbox:checked').forEach(cb => {
+        if (!seenUids.has(cb.dataset.uid)) {
+          seenUids.add(cb.dataset.uid);
+          mergedPages.push({ uid: cb.dataset.uid, title: cb.dataset.title, shortName: cb.dataset.short });
+        }
+      });
+
+      // Then add search results (excluding already added)
+      for (const page of results) {
+        if (!seenUids.has(page.uid)) {
+          seenUids.add(page.uid);
+          mergedPages.push(page);
+        }
+      }
+
+      pagesListContainer.innerHTML = renderPagesList(mergedPages);
+
+      // Re-check previously checked pages
+      pagesListContainer.querySelectorAll('.page-checkbox').forEach(cb => {
+        if (checkedUids.has(cb.dataset.uid)) cb.checked = true;
+      });
+
+      attachPageCheckboxListeners();
+      updatePageCount();
+      updateSelectAllPagesLabel();
+    };
+
+    pageSearchBtn.addEventListener('click', doPageSearch);
+    pageSearchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        e.stopPropagation();
+        doPageSearch();
+      }
+    });
+
+    // Page filter toggle
+    pageFilterEnabled.addEventListener('change', () => {
+      pageFilterTag.disabled = !pageFilterEnabled.checked;
+      pageFilterTag.style.opacity = pageFilterEnabled.checked ? '1' : '0.5';
+      if (pageFilterEnabled.checked) {
+        pageFilterTag.focus();
+      } else {
+        pageFilterErrorDiv.style.display = 'none';
+        pageFilterTag.style.borderColor = '#ccc';
+      }
+    });
+
+    // Clear error state when user types in page filter tag
+    pageFilterTag.addEventListener('input', () => {
+      pageFilterErrorDiv.style.display = 'none';
+      pageFilterTag.style.borderColor = '#ccc';
+    });
+
+    // Make updatePageCount accessible from switchTab
+    window._updatePageCount = updatePageCount;
+
     // Format selector logic
     const updateFormatButtonStyles = () => {
       formatSelector.querySelectorAll('.format-btn').forEach(btn => {
@@ -1444,7 +1804,7 @@ const promptUnifiedExport = (pageName, pageUid) => {
           format: selectedFormat,
           epubOptions: { ...epubOptions }
         });
-      } else {
+      } else if (activeTab === 'branches') {
         const selectedUids = getSelectedBranchUids();
         if (selectedUids.length === 0) {
           alert('Por favor selecciona al menos una rama para exportar.');
@@ -1499,6 +1859,41 @@ const promptUnifiedExport = (pageName, pageUid) => {
           filterTag: validatedFilterTag,
           useOrderPrefix: orderPrefixEnabled.checked,
           useDescendingOrder: orderDescending.checked,
+          format: selectedFormat,
+          epubOptions: { ...epubOptions }
+        });
+      } else if (activeTab === 'pages') {
+        // Pages mode export
+        const selectedPageCheckboxes = pagesListContainer.querySelectorAll('.page-checkbox:checked');
+        const selectedPages = Array.from(selectedPageCheckboxes).map(cb => ({
+          uid: cb.dataset.uid,
+          title: cb.dataset.title,
+          shortName: cb.dataset.short
+        }));
+
+        if (selectedPages.length === 0) {
+          alert('Por favor selecciona al menos una página para exportar.');
+          return;
+        }
+
+        // Validate optional filter tag
+        let validatedFilterTag = null;
+        if (pageFilterEnabled && pageFilterEnabled.checked) {
+          const tagValue = pageFilterTag.value.trim();
+          if (!tagValue) {
+            pageFilterTag.style.borderColor = '#DC143C';
+            pageFilterTag.focus();
+            return;
+          }
+          validatedFilterTag = cleanTagInput(tagValue);
+        }
+
+        cleanup();
+        resolve({
+          cancelled: false,
+          mode: 'pages',
+          selectedPages,
+          filterTag: validatedFilterTag,
           format: selectedFormat,
           epubOptions: { ...epubOptions }
         });
@@ -1717,6 +2112,90 @@ const unifiedExport = async () => {
             console.error('Error creating ZIP:', err);
             showNotification('❌ Error creando ZIP', '#DC143C');
           }
+        }
+      }
+
+    } else if (result.mode === 'pages') {
+      // Export by page selection
+      const { selectedPages, filterTag, format, epubOptions } = result;
+
+      showNotification(`📄 Procesando ${selectedPages.length} página${selectedPages.length !== 1 ? 's' : ''}...`, '#137CBD');
+
+      const files = [];
+
+      for (const page of selectedPages) {
+        try {
+          const safeName = generatePageFilename(page.title);
+          let tree;
+
+          if (filterTag) {
+            // Use findBlocksByTag with this page's UID
+            const blocks = findBlocksByTag(filterTag, page.uid);
+            if (!blocks || blocks.length === 0) continue;
+            tree = buildExportTree(blocks);
+          } else {
+            // Get all content from the page
+            const roots = getRootBlocks(page.uid);
+            if (!roots || roots.length === 0) continue;
+            tree = roots.map(r => {
+              const uid = r[':block/uid'] || r.uid;
+              return getBlockWithDescendants(uid);
+            }).filter(Boolean);
+          }
+
+          if (!tree || tree.length === 0) continue;
+
+          if (format === 'epub') {
+            const blob = await generateEpubBlob(tree, page.shortName, epubOptions);
+            files.push({ filename: `${safeName}.epub`, blob, isBlob: true });
+          } else {
+            const markdown = treeToMarkdown(tree);
+            const header = `# ${page.shortName}\n> Generated: ${new Date().toLocaleString()}${filterTag ? `\n> Filter: #${filterTag}` : ''}\n\n---\n\n`;
+            files.push({ filename: `${safeName}.md`, content: header + markdown, isBlob: false });
+          }
+        } catch (err) {
+          console.error(`Error processing page ${page.title}:`, err);
+        }
+      }
+
+      if (files.length === 0) {
+        const filterMsg = filterTag ? ` con tag #${filterTag}` : '';
+        showNotification(`❌ No se encontró contenido${filterMsg}`, '#DC143C');
+        return;
+      }
+
+      // Download based on file count
+      if (files.length <= 5) {
+        // Individual downloads
+        for (const f of files) {
+          if (f.isBlob) {
+            downloadBlob(f.blob, f.filename);
+          } else {
+            downloadFile(f.content, f.filename);
+          }
+        }
+        showNotification(`✓ Exportado${files.length !== 1 ? 's' : ''} ${files.length} archivo${files.length !== 1 ? 's' : ''}`, '#28a745');
+      } else {
+        // ZIP download
+        try {
+          const JSZip = await loadJSZip();
+          const zip = new JSZip();
+
+          for (const f of files) {
+            zip.file(f.filename, f.isBlob ? f.blob : f.content);
+          }
+
+          const date = new Date().toISOString().split('T')[0];
+          const safePageName = pageName.replace(/[\/\\:*?"<>|]/g, '_').substring(0, 30);
+          const zipFilename = `export_${safePageName}_${date}.zip`;
+
+          const blob = await zip.generateAsync({ type: 'blob' });
+          downloadBlob(blob, zipFilename);
+
+          showNotification(`✓ Exportado ZIP con ${files.length} archivos`, '#28a745');
+        } catch (err) {
+          console.error('Error creating ZIP:', err);
+          showNotification('❌ Error creando ZIP', '#DC143C');
         }
       }
     }
