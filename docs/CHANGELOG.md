@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.19.0] - 2026-02-20 16:41
+
+### Changed
+- **Generador EPUB 3.0 Manual**: Se reemplazó la librería subyacente de generación (jEpub) por un generador manual nativo de EPUB 3.0.
+  - Genera archivos XHTML bien formados en vez de HTML simple.
+  - Elimina atributos de estilo inline en favor de una hoja de estilos CSS externa (`styles.css`).
+  - Añade soporte completo para `nav.xhtml` de EPUB 3.0 manteniendo compatibilidad con `toc.ncx` de EPUB 2.0.
+  - Declara explícitamente el metadata de lenguaje y tiempo de última modificación.
+  - Previene problemas de compresión de `mimetype` que causaban errores de formato.
+- **Kindle Compatibility**: Estos cambios resuelven directamente los errores del conversor de Amazon ("Send to Kindle").
+
+### Removed
+- **jEpub y EJS dependencies**: Eliminados al ya no ser necesarios. El payload del script ahora es más liviano y con menos puntos de fallo externo.
+
+---
+
 ## [2.18.0] - 2026-02-20 15:35
 
 ### Added

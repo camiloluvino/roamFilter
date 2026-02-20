@@ -1,6 +1,6 @@
 // Roam Filter Export - Smart Export for Filtered Blocks
-// Version: 2.18.0
-// Date: 2026-02-20 15:35
+// Version: 2.19.0
+// Date: 2026-02-20 16:41
 //
 // Created by Camilo Luvino
 // https://github.com/camiloluvino/roamExportFilter
@@ -27,38 +27,6 @@ const loadJSZip = () => {
   });
 };
 
-// Load EJS from CDN (required by jEpub v2+)
-const loadEJS = () => {
-  return new Promise((resolve, reject) => {
-    if (window.ejs) {
-      resolve(window.ejs);
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = 'https://unpkg.com/ejs@3.1.10/ejs.min.js';
-    script.onload = () => resolve(window.ejs);
-    script.onerror = () => reject(new Error('Failed to load EJS'));
-    document.head.appendChild(script);
-  });
-};
-
-// Load jEpub from CDN for EPUB exports (depends on JSZip and EJS)
-const loadJEpub = () => {
-  return new Promise((resolve, reject) => {
-    if (window.jEpub) {
-      resolve(window.jEpub);
-      return;
-    }
-    // jEpub depends on JSZip and EJS, ensure they're loaded first
-    Promise.all([loadJSZip(), loadEJS()]).then(() => {
-      const script = document.createElement('script');
-      script.src = 'https://unpkg.com/jepub/dist/jepub.js';
-      script.onload = () => resolve(window.jEpub);
-      script.onerror = () => reject(new Error('Failed to load jEpub'));
-      document.head.appendChild(script);
-    }).catch(reject);
-  });
-};
 
 // ============================================
 // INLINE MODULES (Roam doesn't support ES modules)
@@ -899,101 +867,250 @@ const generateHeader = (tagName, blockCount) => {
 };
 
 // ============================================
-// EPUB EXPORT FUNCTIONS
+// EPUB 3.0 EXPORT FUNCTIONS (manual generator)
+// Uses JSZip directly — no jEpub dependency
 // ============================================
 
-// Helper to escape HTML special characters
+// Helper to escape XML/XHTML special characters
 const escapeHTML = (str) => {
   if (!str) return '';
   return str
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 };
 
-// Convert tree to EPUB-compatible HTML with configurable styling
-const treeToEpubHTML = (trees, options = {}, level = 0) => {
-  if (!trees || trees.length === 0) return "";
+// Generate a UUID v4
+const generateEpubUUID = () => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
+
+// Convert tree to XHTML content for EPUB chapter
+const treeToXhtml = (trees, options = {}, level = 0) => {
+  if (!trees || trees.length === 0) return '';
 
   const {
-    blockSpacing = 'normal',    // compact | normal | wide
-    levelSpacing = 'subtle',    // none | subtle | marked  
     levelIndicator = 'indent'   // indent | line | number
   } = options;
 
-  // Block spacing values (margin-bottom)
-  const blockMargins = { compact: '0.2em', normal: '0.5em', wide: '1em' };
+  // Choose CSS class based on indicator type
+  const ulClass = levelIndicator === 'line'
+    ? (level > 0 ? 'level-line' : 'level-root')
+    : (levelIndicator === 'number' ? 'level-numbered' : 'level-indent');
 
-  // Level change spacing values (margin-top for nested lists)
-  const levelMargins = { none: '0', subtle: '0.3em', marked: '0.8em' };
-
-  // Get list style based on indicator type
-  const getListStyle = () => {
-    if (levelIndicator === 'line') {
-      return level > 0
-        ? 'border-left: 2px solid #ccc; padding-left: 1em; margin-left: 0.5em; list-style-type: none;'
-        : 'list-style-type: none;';
-    }
-    if (levelIndicator === 'number') {
-      return 'list-style-type: decimal;';
-    }
-    return 'list-style-type: disc;'; // indent default
-  };
-
-  const ulStyle = `
-    margin-left: ${level > 0 ? '1.5em' : '0'};
-    margin-top: ${level > 0 ? levelMargins[levelSpacing] : '0'};
-    padding-left: ${levelIndicator === 'line' ? '0' : '1.5em'};
-    ${getListStyle()}
-  `.replace(/\s+/g, ' ').trim();
-
-  const liStyle = `margin-bottom: ${blockMargins[blockSpacing]};`;
-
-  let html = `<ul style="${ulStyle}">`;
+  let xhtml = `<ul class="${ulClass} depth-${level}">`;
 
   for (const node of trees) {
-    html += `<li style="${liStyle}">${escapeHTML(node.content)}`;
+    xhtml += `<li>${escapeHTML(node.content)}`;
 
     if (node.children && node.children.length > 0) {
-      html += treeToEpubHTML(node.children, options, level + 1);
+      xhtml += treeToXhtml(node.children, options, level + 1);
     }
 
-    html += '</li>';
+    xhtml += '</li>';
   }
 
-  html += '</ul>';
-  return html;
+  xhtml += '</ul>';
+  return xhtml;
+};
+
+// --- EPUB 3.0 structure files ---
+
+const epubCreateContainerXml = () => {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>`;
+};
+
+const epubCreateContentOpf = (title, uuid, date) => {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="BookId">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="BookId">urn:uuid:${uuid}</dc:identifier>
+    <dc:title>${escapeHTML(title)}</dc:title>
+    <dc:creator>Roam Export Filter</dc:creator>
+    <dc:language>es</dc:language>
+    <dc:date>${date}</dc:date>
+    <meta property="dcterms:modified">${new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')}</meta>
+  </metadata>
+  <manifest>
+    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+    <item id="css" href="styles.css" media-type="text/css"/>
+    <item id="chapter1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine toc="ncx">
+    <itemref idref="nav"/>
+    <itemref idref="chapter1"/>
+  </spine>
+</package>`;
+};
+
+const epubCreateTocNcx = (title, uuid) => {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+  <head>
+    <meta name="dtb:uid" content="urn:uuid:${uuid}"/>
+    <meta name="dtb:depth" content="1"/>
+    <meta name="dtb:totalPageCount" content="0"/>
+    <meta name="dtb:maxPageNumber" content="0"/>
+  </head>
+  <docTitle><text>${escapeHTML(title)}</text></docTitle>
+  <navMap>
+    <navPoint id="navpoint1" playOrder="1">
+      <navLabel><text>Tabla de Contenidos</text></navLabel>
+      <content src="nav.xhtml"/>
+    </navPoint>
+    <navPoint id="navpoint2" playOrder="2">
+      <navLabel><text>${escapeHTML(title)}</text></navLabel>
+      <content src="chapter1.xhtml"/>
+    </navPoint>
+  </navMap>
+</ncx>`;
+};
+
+const epubCreateNavXhtml = (title) => {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<head>
+  <title>${escapeHTML(title)}</title>
+  <link rel="stylesheet" type="text/css" href="styles.css"/>
+</head>
+<body>
+  <nav epub:type="toc" id="toc">
+    <h1>Tabla de Contenidos</h1>
+    <ol>
+      <li><a href="chapter1.xhtml">${escapeHTML(title)}</a></li>
+    </ol>
+  </nav>
+</body>
+</html>`;
+};
+
+const epubCreateStylesCss = (options = {}) => {
+  const {
+    blockSpacing = 'normal',    // compact | normal | wide
+    levelSpacing = 'subtle',    // none | subtle | marked
+    levelIndicator = 'indent'   // indent | line | number
+  } = options;
+
+  const blockMargins = { compact: '0.2em', normal: '0.5em', wide: '1em' };
+  const levelMargins = { none: '0', subtle: '0.3em', marked: '0.8em' };
+
+  return `body {
+  font-family: Georgia, "Times New Roman", serif;
+  margin: 1em;
+  line-height: 1.6;
+}
+h1 {
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 1.6em;
+  margin-bottom: 0.5em;
+}
+nav ol {
+  list-style-type: decimal;
+  padding-left: 1.5em;
+}
+nav li {
+  margin: 0.3em 0;
+}
+/* Block spacing */
+li {
+  margin-bottom: ${blockMargins[blockSpacing]};
+}
+/* Root-level lists */
+ul.depth-0 {
+  margin-left: 0;
+  padding-left: 1.5em;
+}
+/* Nested lists - level spacing */
+ul {
+  margin-top: ${levelMargins[levelSpacing]};
+  margin-left: 1.5em;
+  padding-left: 1.5em;
+}
+/* Indicator: indent (default bullets) */
+ul.level-indent {
+  list-style-type: disc;
+}
+/* Indicator: line (vertical border) */
+ul.level-line {
+  border-left: 2px solid #ccc;
+  padding-left: 1em;
+  margin-left: 0.5em;
+  list-style-type: none;
+}
+ul.level-root {
+  list-style-type: none;
+}
+/* Indicator: numbered */
+ul.level-numbered {
+  list-style-type: decimal;
+}`;
+};
+
+const epubCreateChapterXhtml = (title, bodyXhtml) => {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <title>${escapeHTML(title)}</title>
+  <link rel="stylesheet" type="text/css" href="styles.css"/>
+</head>
+<body>
+  <h1>${escapeHTML(title)}</h1>
+${bodyXhtml}
+</body>
+</html>`;
 };
 
 // Generate EPUB blob without downloading (for ZIP packaging)
 const generateEpubBlob = async (tree, title, options = {}) => {
-  await loadJEpub();
+  const JSZip = await loadJSZip();
+  const zip = new JSZip();
 
-  const bodyContent = treeToEpubHTML(tree, options);
+  const uuid = generateEpubUUID();
+  const date = new Date().toISOString().split('T')[0];
+  const bodyXhtml = treeToXhtml(tree, options);
 
-  const book = new jEpub();
-  book.init({
-    title: title,
-    author: 'Roam Export',
-    publisher: 'Roam Export Filter',
-    description: `Exported from Roam Research on ${new Date().toLocaleDateString()}`
+  // 1. mimetype — MUST be first file and uncompressed (EPUB spec)
+  zip.file('mimetype', 'application/epub+zip', { compression: 'STORE' });
+
+  // 2. META-INF/container.xml
+  zip.file('META-INF/container.xml', epubCreateContainerXml());
+
+  // 3. OEBPS/content.opf (EPUB 3.0 package)
+  zip.file('OEBPS/content.opf', epubCreateContentOpf(title, uuid, date));
+
+  // 4. OEBPS/toc.ncx (EPUB 2.0 navigation — backward compat)
+  zip.file('OEBPS/toc.ncx', epubCreateTocNcx(title, uuid));
+
+  // 5. OEBPS/nav.xhtml (EPUB 3.0 navigation)
+  zip.file('OEBPS/nav.xhtml', epubCreateNavXhtml(title));
+
+  // 6. OEBPS/styles.css
+  zip.file('OEBPS/styles.css', epubCreateStylesCss(options));
+
+  // 7. OEBPS/chapter1.xhtml
+  zip.file('OEBPS/chapter1.xhtml', epubCreateChapterXhtml(title, bodyXhtml));
+
+  // Generate the EPUB as a blob
+  return await zip.generateAsync({
+    type: 'blob',
+    mimeType: 'application/epub+zip',
+    compression: 'DEFLATE',
+    compressionOptions: { level: 9 }
   });
-
-  const css = `
-    <style>
-      body { 
-        font-family: Georgia, serif; 
-        line-height: 1.7; 
-        text-align: justify;
-      }
-      ul { margin-bottom: 0.5em; }
-      li { line-height: 1.6; }
-    </style>
-  `;
-
-  book.add(title, css + bodyContent);
-  return await book.generate('blob');
 };
 
 // Generate and download EPUB file

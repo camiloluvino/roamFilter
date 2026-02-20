@@ -219,14 +219,14 @@ window.roamExportFilterCleanup = cleanupExtension;
 
 ### Dependencias CDN: siempre fijar versión
 
-Usar URLs genéricas como `unpkg.com/package` (sin versión) puede causar que librerías se actualicen silenciosamente y rompan el código. Ejemplo: EJS v4.0.0 eliminó soporte de browser, causando `ReferenceError: exports is not defined`.
+Usar URLs genéricas como `unpkg.com/package` (sin versión) puede causar que librerías se actualicen silenciosamente y rompan el código.
 
 - ❌ Inseguro: `https://unpkg.com/package/file.js`
 - ✅ Seguro: `https://unpkg.com/package@x.y.z/file.js`
 
 ### Verificar APIs antes de asumir
 
-No asumir que una librería tiene cierto método solo porque "debería". Si la documentación es escasa, revisar el código fuente. Ejemplo: asumimos que jEpub tenía `.css()` pero no existía.
+No asumir que una librería tiene cierto método solo porque "debería". Si la documentación es escasa, revisar el código fuente. (Nota histórica: en el pasado asumenmos que jEpub tenía `.css()` pero no existía, lo que originó su eventual reemplazo por un generador manual EPUB 3.0).
 
 ### Cache agresivo de Roam
 

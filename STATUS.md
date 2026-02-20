@@ -1,12 +1,12 @@
 # Project Status - Roam Export Filter
 
-> **Última actualización**: 2026-02-20 15:35
+> **Última actualización**: 2026-02-20 16:41
 
 ---
 
 ## Versión actual
 
-**2.18.0** (2026-02-20 15:35)
+**2.19.0** (2026-02-20 16:41)
 
 ---
 
@@ -15,7 +15,7 @@
 | Funcionalidad | Estado | Notas |
 |---------------|--------|-------|
 | **Smart Export** | ✅ Estable | Modal unificado con 3 pestañas y buscador de páginas |
-| **EPUB Export** | 🆕 Nueva | Exporta a formato EPUB con opciones de estilo |
+| **EPUB Export** | ✅ Estable | Exporta a formato EPUB 3.0 manual integrado |
 | **Smart Copy (Alt+Shift+C)** | ✅ Estable | Copia bloques visualmente seleccionados |
 | **Export by Root Blocks** | ✅ Estable | Exporta cada bloque raíz como archivo separado |
 | **ZIP Export (>5 files)** | ✅ Estable | Bundling automático con JSZip |
@@ -36,6 +36,10 @@
 ---
 
 ## Historial reciente
+
+### v2.19.0 (2026-02-20 16:41)
+- Changed: Reemplazado generador de EPUB basado en jEpub por un generador manual de EPUB 3.0 para mejor compatibilidad con Kindle ("Send to Kindle").
+- Removed: Eliminadas dependencias de EJS y jEpub.
 
 ### v2.14.4 (2026-01-22 01:38)
 - Fixed: EPUB export error - `book.css is not a function`
