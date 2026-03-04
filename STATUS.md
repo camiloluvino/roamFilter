@@ -1,12 +1,12 @@
 # Project Status - Roam Export Filter
 
-> **Última actualización**: 2026-02-20 16:41
+> **Última actualización**: 2026-03-04 14:55
 
 ---
 
 ## Versión actual
 
-**2.19.0** (2026-02-20 16:41)
+**2.20.1** (2026-03-04 14:55)
 
 ---
 
@@ -15,6 +15,7 @@
 | Funcionalidad | Estado | Notas |
 |---------------|--------|-------|
 | **Smart Export** | ✅ Estable | Modal unificado con 3 pestañas y buscador de páginas |
+| **MD Export** | ✅ Estable | Exporta a Markdown en formato Jerárquico o Plano |
 | **EPUB Export** | ✅ Estable | Exporta a formato EPUB 3.0 manual integrado |
 | **Smart Copy (Alt+Shift+C)** | ✅ Estable | Copia bloques visualmente seleccionados |
 | **Export by Root Blocks** | ✅ Estable | Exporta cada bloque raíz como archivo separado |
@@ -36,6 +37,12 @@
 ---
 
 ## Historial reciente
+
+### v2.20.1 (2026-03-04 14:55)
+- Fixed: Extracción e inyección de Heading nativo en exportación Markdown Plano.
+
+### v2.20.0 (2026-03-04 14:35)
+- Added: Soporte para exportación en "Markdown Plano" removiendo viñetas e indentación, generando párrafos separados en el modal de Smart Export.
 
 ### v2.19.0 (2026-02-20 16:41)
 - Changed: Reemplazado generador de EPUB basado en jEpub por un generador manual de EPUB 3.0 para mejor compatibilidad con Kindle ("Send to Kindle").

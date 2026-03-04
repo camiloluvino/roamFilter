@@ -1,6 +1,6 @@
 // Roam Filter Export - Smart Export for Filtered Blocks
-// Version: 2.20.0
-// Date: 2026-03-04 14:35
+// Version: 2.20.1
+// Date: 2026-03-04 14:55
 //
 // Created by Camilo Luvino
 // https://github.com/camiloluvino/roamExportFilter
@@ -111,8 +111,8 @@ const findBlocksByTag = (tagName, targetPageUid = null) => {
     // :block/page is the page entity where the block lives
     // Include :block/order to maintain correct sorting
     const results = window.roamAlphaAPI.data.q(`
-      [:find (pull ?block [:block/uid :block/string :block/order
-                           {:block/parents [:block/uid :block/string :block/order]}])
+      [:find (pull ?block [:block/uid :block/string :block/order :block/heading
+                           {:block/parents [:block/uid :block/string :block/order :block/heading]}])
        :where
        [?tag :node/title "${tagName}"]
        [?block :block/refs ?tag]
@@ -216,9 +216,8 @@ const getBlockWithDescendants = (blockUid) => {
   }
 
   try {
-    // Roam doesn't support recursive '...' syntax, so we need to manually recurse
     const result = window.roamAlphaAPI.pull(
-      `[:block/uid :block/string :block/order {:block/children [:block/uid :block/order]}]`,
+      `[:block/uid :block/string :block/order :block/heading {:block/children [:block/uid :block/order]}]`,
       [":block/uid", blockUid]
     );
 
@@ -240,11 +239,13 @@ const buildTreeRecursively = (block) => {
 
   const uid = block[":block/uid"] || block.uid;
   const content = block[":block/string"] || block.string || "";
+  const heading = block[":block/heading"] || block.heading || 0;
   const children = block[":block/children"] || block.children || [];
 
   const node = {
     uid,
     content,
+    heading,
     children: []
   };
 
@@ -261,7 +262,7 @@ const buildTreeRecursively = (block) => {
       const childUid = child[":block/uid"] || child.uid;
       if (childUid) {
         const childData = window.roamAlphaAPI.pull(
-          `[:block/uid :block/string :block/order {:block/children [:block/uid :block/order]}]`,
+          `[:block/uid :block/string :block/order :block/heading {:block/children [:block/uid :block/order]}]`,
           [":block/uid", childUid]
         );
         if (childData) {
@@ -570,6 +571,7 @@ const buildExportTree = (targetBlocks) => {
     // Handle both prefixed (:block/uid) and non-prefixed (uid) attribute names
     const uid = block.uid || block[":block/uid"];
     const content = block.string || block[":block/string"] || "";
+    const heading = block.heading || block[":block/heading"] || 0;
     const parents = block.parents || block[":block/parents"] || [];
 
     if (DEBUG) {
@@ -584,6 +586,7 @@ const buildExportTree = (targetBlocks) => {
       nodeMap.set(uid, {
         uid,
         content,
+        heading,
         children: [],
         order: blockOrder,
         isTarget: true
@@ -612,6 +615,7 @@ const buildExportTree = (targetBlocks) => {
         const parentUid = parent.uid || parent[":block/uid"];
         const parentContent = parent.string || parent[":block/string"] || parent.title || parent[":node/title"] || "";
         const parentOrder = parent.order || parent[":block/order"] || 0;
+        const parentHeading = parent.heading || parent[":block/heading"] || 0;
 
         // Skip parents with empty content - connect child directly to grandparent
         if (!parentContent || parentContent.trim() === "") {
@@ -633,6 +637,7 @@ const buildExportTree = (targetBlocks) => {
           nodeMap.set(parentUid, {
             uid: parentUid,
             content: parentContent,
+            heading: parentHeading,
             children: [],
             order: parentOrder,
             isTarget: false
@@ -791,12 +796,21 @@ const treeToMarkdown = (trees, indentLevel = 0, options = {}) => {
   const indent = isFlat ? "" : "  ".repeat(indentLevel);
 
   for (const node of trees) {
+    let nodeText = node.content;
+
+    // Apply heading if present and not already manually added
+    if (node.heading && node.heading > 0) {
+      if (nodeText && !nodeText.trim().match(/^#{1,6}\s/)) {
+        nodeText = "#".repeat(node.heading) + " " + nodeText;
+      }
+    }
+
     if (isFlat) {
-      if (node.content && node.content.trim()) {
-        lines.push(`${node.content}\n`);
+      if (nodeText && nodeText.trim()) {
+        lines.push(`${nodeText}\n`);
       }
     } else {
-      lines.push(`${indent}- ${node.content}`);
+      lines.push(`${indent}- ${nodeText}`);
     }
 
     if (node.children && node.children.length > 0) {

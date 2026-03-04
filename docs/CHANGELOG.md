@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.20.1] - 2026-03-04 14:55
+
+### Fixed
+- **Markdown Plano Títulos perdidos**: Ahora el modo de Markdown "Plano" extrae y respeta el nivel de título (Heading 1, 2, 3) asignado a los bloques de Roam y los inyecta como Títulos Markdown válidos (`#`, `##`, `###`), conservando su peso semántico y evitando que sean párrafos ordinarios al perder la indentación original.
+
+---
+
 ## [2.20.0] - 2026-03-04 14:35
 
 ### Added
