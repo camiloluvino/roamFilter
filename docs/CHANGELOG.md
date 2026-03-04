@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.20.0] - 2026-03-04 14:35
+
+### Added
+- **Exportación "Markdown Plano"**: Se agregó la opción de estructura (Jerárquico vs. Plano) en el modal de formato Markdown. Activar "Plano (Párrafos)" exporta el contenido en texto limpio usando párrafos, eliminando las viñetas e indentación natural de Roam.
+
+---
+
 ## [2.19.0] - 2026-02-20 16:41
 
 ### Changed

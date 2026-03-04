@@ -1,6 +1,6 @@
 // Roam Filter Export - Smart Export for Filtered Blocks
-// Version: 2.19.0
-// Date: 2026-02-20 16:41
+// Version: 2.20.0
+// Date: 2026-03-04 14:35
 //
 // Created by Camilo Luvino
 // https://github.com/camiloluvino/roamExportFilter
@@ -780,25 +780,37 @@ const buildExportTree = (targetBlocks) => {
 };
 
 // --- exporter.js ---
-const treeToMarkdown = (trees, indentLevel = 0) => {
+const treeToMarkdown = (trees, indentLevel = 0, options = {}) => {
   if (!trees || trees.length === 0) {
     return "";
   }
 
+  const { structure = 'hierarchical' } = options;
+  const isFlat = structure === 'flat';
   const lines = [];
-  const indent = "  ".repeat(indentLevel);
+  const indent = isFlat ? "" : "  ".repeat(indentLevel);
 
   for (const node of trees) {
-    lines.push(`${indent}- ${node.content}`);
+    if (isFlat) {
+      if (node.content && node.content.trim()) {
+        lines.push(`${node.content}\n`);
+      }
+    } else {
+      lines.push(`${indent}- ${node.content}`);
+    }
 
     if (node.children && node.children.length > 0) {
-      const childrenMd = treeToMarkdown(node.children, indentLevel + 1);
+      const childrenMd = treeToMarkdown(node.children, isFlat ? 0 : indentLevel + 1, options);
       if (childrenMd) {
         lines.push(childrenMd);
       }
     }
   }
 
+  if (isFlat && indentLevel === 0) {
+    // Para flat markdown devolvemos bloques separados por doble salto de línea
+    return lines.join("\n").replace(/\n{3,}/g, '\n\n').trim() + '\n\n';
+  }
   return lines.join("\n");
 };
 
@@ -1467,6 +1479,19 @@ const promptUnifiedExport = (pageName, pageUid) => {
           </div>
         </div>
         
+        <!-- Markdown Options Panel (visible by default) -->
+        <div id="md-options-panel" style="display: block; margin-top: 12px; padding: 12px; background: white; border: 1px solid #e0e0e0; border-radius: 4px;">
+          <div style="display: flex; flex-wrap: wrap; gap: 20px;">
+            <div>
+              <span style="font-size: 12px; color: #666; display: block; margin-bottom: 6px;">Estructura:</span>
+              <div id="md-structure-selector" style="display: flex; border-radius: 4px; overflow: hidden;">
+                <button data-structure="hierarchical" class="active" style="padding: 4px 10px; font-size: 12px; border: 1px solid #137CBD; background: #137CBD; color: white; cursor: pointer; border-radius: 4px 0 0 4px;">Jerárquico (Viñetas)</button>
+                <button data-structure="flat" style="padding: 4px 10px; font-size: 12px; border: 1px solid #ccc; border-left: none; background: white; color: #666; cursor: pointer; border-radius: 0 4px 4px 0;">Plano (Párrafos)</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- EPUB Options Panel (hidden by default) -->
         <div id="epub-options-panel" style="display: none; margin-top: 12px; padding: 12px; background: white; border: 1px solid #e0e0e0; border-radius: 4px;">
           <div style="display: flex; flex-wrap: wrap; gap: 20px;">
@@ -1544,12 +1569,14 @@ const promptUnifiedExport = (pageName, pageUid) => {
     const pageSearchInput = document.getElementById('page-search-input');
     const pageSearchBtn = document.getElementById('page-search-btn');
 
-    // Format and EPUB options elements
+    // Format and EPUB/MD options elements
     const formatSelector = document.getElementById('format-selector');
+    const mdOptionsPanel = document.getElementById('md-options-panel');
     const epubOptionsPanel = document.getElementById('epub-options-panel');
     const blockSpacingSelector = document.getElementById('block-spacing-selector');
     const levelSpacingSelector = document.getElementById('level-spacing-selector');
     const levelIndicatorSelector = document.getElementById('level-indicator-selector');
+    const mdStructureSelector = document.getElementById('md-structure-selector');
 
     let activeTab = 'filters';
     let selectedFormat = 'md'; // 'md' or 'epub'
@@ -1557,6 +1584,9 @@ const promptUnifiedExport = (pageName, pageUid) => {
       blockSpacing: 'normal',
       levelSpacing: 'subtle',
       levelIndicator: 'indent'
+    };
+    let mdOptions = {
+      structure: 'hierarchical'
     };
 
     // Tab switching
@@ -1846,7 +1876,8 @@ const promptUnifiedExport = (pageName, pageUid) => {
           cursor: pointer;
         `;
       });
-      // Show/hide EPUB options panel
+      // Show/hide options panel based on format
+      mdOptionsPanel.style.display = selectedFormat === 'md' ? 'block' : 'none';
       epubOptionsPanel.style.display = selectedFormat === 'epub' ? 'block' : 'none';
     };
 
@@ -1857,12 +1888,13 @@ const promptUnifiedExport = (pageName, pageUid) => {
       });
     });
 
-    // EPUB options selector helper
-    const setupOptionSelector = (selector, optionKey, values) => {
+    // Options selector helper
+    const setupOptionSelector = (selector, optionsObj, optionKey) => {
+      if (!selector) return;
       const updateStyles = () => {
         selector.querySelectorAll('button').forEach((btn, idx) => {
-          const value = btn.dataset.spacing || btn.dataset.indicator;
-          const isActive = epubOptions[optionKey] === value;
+          const value = btn.dataset.spacing || btn.dataset.indicator || btn.dataset.structure;
+          const isActive = optionsObj[optionKey] === value;
           const isFirst = idx === 0;
           const isLast = idx === selector.querySelectorAll('button').length - 1;
           btn.style.cssText = `
@@ -1881,15 +1913,16 @@ const promptUnifiedExport = (pageName, pageUid) => {
 
       selector.querySelectorAll('button').forEach(btn => {
         btn.addEventListener('click', () => {
-          epubOptions[optionKey] = btn.dataset.spacing || btn.dataset.indicator;
+          optionsObj[optionKey] = btn.dataset.spacing || btn.dataset.indicator || btn.dataset.structure;
           updateStyles();
         });
       });
     };
 
-    setupOptionSelector(blockSpacingSelector, 'blockSpacing');
-    setupOptionSelector(levelSpacingSelector, 'levelSpacing');
-    setupOptionSelector(levelIndicatorSelector, 'levelIndicator');
+    setupOptionSelector(blockSpacingSelector, epubOptions, 'blockSpacing');
+    setupOptionSelector(levelSpacingSelector, epubOptions, 'levelSpacing');
+    setupOptionSelector(levelIndicatorSelector, epubOptions, 'levelIndicator');
+    setupOptionSelector(mdStructureSelector, mdOptions, 'structure');
 
     const cleanup = () => {
       document.body.removeChild(overlay);
@@ -1919,7 +1952,8 @@ const promptUnifiedExport = (pageName, pageUid) => {
           mode: 'filters',
           tagName: cleanTagInput(tagValue),
           format: selectedFormat,
-          epubOptions: { ...epubOptions }
+          epubOptions: { ...epubOptions },
+          mdOptions: { ...mdOptions }
         });
       } else if (activeTab === 'branches') {
         const selectedUids = getSelectedBranchUids();
@@ -1977,7 +2011,8 @@ const promptUnifiedExport = (pageName, pageUid) => {
           useOrderPrefix: orderPrefixEnabled.checked,
           useDescendingOrder: orderDescending.checked,
           format: selectedFormat,
-          epubOptions: { ...epubOptions }
+          epubOptions: { ...epubOptions },
+          mdOptions: { ...mdOptions }
         });
       } else if (activeTab === 'pages') {
         // Pages mode export
@@ -2012,7 +2047,8 @@ const promptUnifiedExport = (pageName, pageUid) => {
           selectedPages,
           filterTag: validatedFilterTag,
           format: selectedFormat,
-          epubOptions: { ...epubOptions }
+          epubOptions: { ...epubOptions },
+          mdOptions: { ...mdOptions }
         });
       }
     });
@@ -2039,7 +2075,8 @@ const promptUnifiedExport = (pageName, pageUid) => {
           mode: 'filters',
           tagName: cleanTagInput(tagInput.value.trim()),
           format: selectedFormat,
-          epubOptions: { ...epubOptions }
+          epubOptions: { ...epubOptions },
+          mdOptions: { ...mdOptions }
         });
         document.removeEventListener('keydown', handleKeydown);
       }
@@ -2105,7 +2142,7 @@ const unifiedExport = async () => {
         }
       } else {
         // Markdown export (default)
-        const markdown = treeToMarkdown(exportTree);
+        const markdown = treeToMarkdown(exportTree, 0, result.mdOptions);
         const header = generateHeader(tagName, targetBlocks.length);
         const filename = generateFilename(tagName);
 
@@ -2117,7 +2154,7 @@ const unifiedExport = async () => {
 
     } else if (result.mode === 'branches') {
       // Export by branch selection
-      const { selectedUids, filterTag, useOrderPrefix, useDescendingOrder, format, epubOptions } = result;
+      const { selectedUids, filterTag, useOrderPrefix, useDescendingOrder, format, epubOptions, mdOptions } = result;
 
       showNotification(`📄 Procesando ${selectedUids.length} ramas...`, '#137CBD');
 
@@ -2184,7 +2221,7 @@ const unifiedExport = async () => {
           const prefix = useOrderPrefix ? String(prefixNumber).padStart(2, '0') + '_' : '';
           const filename = prefix + generateRootFilename(rootContent);
 
-          const markdown = treeToMarkdown([branchTree]);
+          const markdown = treeToMarkdown([branchTree], 0, mdOptions);
           const header = `# ${rootContent}\n> Generated: ${new Date().toLocaleString()}${filterTag ? `\n> Filter: #${filterTag}` : ''}\n\n---\n\n`;
 
           files.push({
@@ -2234,7 +2271,7 @@ const unifiedExport = async () => {
 
     } else if (result.mode === 'pages') {
       // Export by page selection
-      const { selectedPages, filterTag, format, epubOptions } = result;
+      const { selectedPages, filterTag, format, epubOptions, mdOptions } = result;
 
       showNotification(`📄 Procesando ${selectedPages.length} página${selectedPages.length !== 1 ? 's' : ''}...`, '#137CBD');
 
@@ -2266,7 +2303,7 @@ const unifiedExport = async () => {
             const blob = await generateEpubBlob(tree, page.shortName, epubOptions);
             files.push({ filename: `${safeName}.epub`, blob, isBlob: true });
           } else {
-            const markdown = treeToMarkdown(tree);
+            const markdown = treeToMarkdown(tree, 0, mdOptions);
             const header = `# ${page.shortName}\n> Generated: ${new Date().toLocaleString()}${filterTag ? `\n> Filter: #${filterTag}` : ''}\n\n---\n\n`;
             files.push({ filename: `${safeName}.md`, content: header + markdown, isBlob: false });
           }
