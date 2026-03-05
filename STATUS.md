@@ -1,12 +1,12 @@
 # Project Status - Roam Export Filter
 
-> **Última actualización**: 2026-03-04 14:55
+> **Última actualización**: 2026-03-05 01:40
 
 ---
 
 ## Versión actual
 
-**2.20.1** (2026-03-04 14:55)
+**2.20.2** (2026-03-05 01:40)
 
 ---
 
@@ -16,7 +16,7 @@
 |---------------|--------|-------|
 | **Smart Export** | ✅ Estable | Modal unificado con 3 pestañas y buscador de páginas |
 | **MD Export** | ✅ Estable | Exporta a Markdown en formato Jerárquico o Plano |
-| **EPUB Export** | ✅ Estable | Exporta a formato EPUB 3.0 manual integrado |
+| **EPUB Export** | ✅ Estable | Exporta a formato EPUB 3.0 con soporte de Markdown |
 | **Smart Copy (Alt+Shift+C)** | ✅ Estable | Copia bloques visualmente seleccionados |
 | **Export by Root Blocks** | ✅ Estable | Exporta cada bloque raíz como archivo separado |
 | **ZIP Export (>5 files)** | ✅ Estable | Bundling automático con JSZip |
@@ -37,6 +37,10 @@
 ---
 
 ## Historial reciente
+
+### v2.20.2 (2026-03-05 01:40)
+- Added: Soporte para formato Markdown de Roam en exportación EPUB (**negritas**, __cursivas__, ^^resaltado^^, links, etc).
+- Added: Estilos CSS personalizados en EPUB para páginas de Roam y etiquetas.
 
 ### v2.20.1 (2026-03-04 14:55)
 - Fixed: Extracción e inyección de Heading nativo en exportación Markdown Plano.

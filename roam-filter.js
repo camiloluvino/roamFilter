@@ -1,6 +1,6 @@
 // Roam Filter Export - Smart Export for Filtered Blocks
-// Version: 2.20.1
-// Date: 2026-03-04 14:55
+// Version: 2.21.0
+// Date: 2026-03-05 01:10
 //
 // Created by Camilo Luvino
 // https://github.com/camiloluvino/roamExportFilter
@@ -20,7 +20,7 @@ const loadJSZip = () => {
       return;
     }
     const script = document.createElement('script');
-    script.src = 'https://unpkg.com/jszip/dist/jszip.min.js';
+    script.src = 'https://unpkg.com/jszip@3.10.1/dist/jszip.min.js';
     script.onload = () => resolve(window.JSZip);
     script.onerror = () => reject(new Error('Failed to load JSZip'));
     document.head.appendChild(script);
@@ -37,6 +37,12 @@ const isRoamAPIAvailable = () => {
   return typeof window !== 'undefined' &&
     window.roamAlphaAPI &&
     typeof window.roamAlphaAPI.data?.q === 'function';
+};
+
+// Escape double quotes in strings interpolated into Datalog queries
+const escapeDatalogString = (str) => {
+  if (!str) return '';
+  return str.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 };
 
 // Get the UID of the currently open page
@@ -61,7 +67,7 @@ const getCurrentPageUid = () => {
     const result = window.roamAlphaAPI.data.q(`
       [:find ?uid .
        :where
-       [?page :node/title "${roamDateTitle}"]
+       [?page :node/title "${escapeDatalogString(roamDateTitle)}"]
        [?page :block/uid ?uid]]
     `);
     return result || null;
@@ -82,7 +88,7 @@ const getCurrentPageUid = () => {
     const result = window.roamAlphaAPI.data.q(`
       [:find ?uid .
        :where
-       [?page :node/title "${roamDateTitle}"]
+       [?page :node/title "${escapeDatalogString(roamDateTitle)}"]
        [?page :block/uid ?uid]]
     `);
     if (DEBUG) console.log('Daily notes fallback — looking for:', roamDateTitle, '→ uid:', result);
@@ -114,10 +120,10 @@ const findBlocksByTag = (tagName, targetPageUid = null) => {
       [:find (pull ?block [:block/uid :block/string :block/order :block/heading
                            {:block/parents [:block/uid :block/string :block/order :block/heading]}])
        :where
-       [?tag :node/title "${tagName}"]
+       [?tag :node/title "${escapeDatalogString(tagName)}"]
        [?block :block/refs ?tag]
        [?block :block/page ?page]
-       [?page :block/uid "${pageUid}"]]
+       [?page :block/uid "${escapeDatalogString(pageUid)}"]]
     `);
 
     if (!results || results.length === 0) {
@@ -397,9 +403,9 @@ const countMatchingRoots = (rootBlocks, tagName) => {
       const result = window.roamAlphaAPI.data.q(`
         [:find ?block .
          :where
-         [?tag :node/title "${tagName}"]
+         [?tag :node/title "${escapeDatalogString(tagName)}"]
          [?block :block/refs ?tag]
-         [?root :block/uid "${rootUid}"]
+         [?root :block/uid "${escapeDatalogString(rootUid)}"]
          (or
            [?block :block/parents ?root]
            (and
@@ -431,10 +437,10 @@ const getFilteredChildren = (rootUid, tagName = null) => {
       [:find (pull ?block [:block/uid :block/string :block/order
                            {:block/parents [:block/uid :block/string :block/order]}])
        :where
-       [?tag :node/title "${tagName}"]
+       [?tag :node/title "${escapeDatalogString(tagName)}"]
        [?block :block/refs ?tag]
        [?block :block/parents ?parent]
-       [?parent :block/uid "${rootUid}"]]
+       [?parent :block/uid "${escapeDatalogString(rootUid)}"]]
     `);
 
     if (!results || results.length === 0) {
@@ -443,9 +449,9 @@ const getFilteredChildren = (rootUid, tagName = null) => {
         [:find (pull ?block [:block/uid :block/string :block/order
                              {:block/parents [:block/uid :block/string :block/order]}])
          :where
-         [?tag :node/title "${tagName}"]
+         [?tag :node/title "${escapeDatalogString(tagName)}"]
          [?block :block/refs ?tag]
-         [?root :block/uid "${rootUid}"]
+         [?root :block/uid "${escapeDatalogString(rootUid)}"]
          [?block :block/parents ?ancestor]
          [?ancestor :block/parents ?root]]
       `);
@@ -908,6 +914,36 @@ const escapeHTML = (str) => {
     .replace(/'/g, '&#39;');
 };
 
+// Transform Roam Markdown to XHTML for EPUB
+const roamMarkupToHtml = (str) => {
+  if (!str) return '';
+  // First, escape HTML characters to prevent malformed tags
+  let html = escapeHTML(str);
+
+  // Bold
+  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  // Italic
+  html = html.replace(/__(.*?)__/g, '<em>$1</em>');
+  // Highlight
+  html = html.replace(/\^\^(.*?)\^\^/g, '<mark>$1</mark>');
+  // Strikethrough
+  html = html.replace(/~~(.*?)~~/g, '<del>$1</del>');
+  // Inline code
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // External links [text](url)
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+
+  // Roam specific links
+  // Page refs: [[Page]]
+  html = html.replace(/\[\[(.*?)\]\]/g, '<span class="roam-page">$1</span>');
+  // Hash Tags: #[[Tag]]
+  html = html.replace(/#\[\[(.*?)\]\]/g, '<span class="roam-tag">#$1</span>');
+  // Simple Hash Tags: #Tag
+  html = html.replace(/#([a-zA-Z0-9_\-]+)/g, '<span class="roam-tag">#$1</span>');
+
+  return html;
+};
+
 // Generate a UUID v4
 const generateEpubUUID = () => {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -922,27 +958,51 @@ const treeToXhtml = (trees, options = {}, level = 0) => {
   if (!trees || trees.length === 0) return '';
 
   const {
-    levelIndicator = 'indent'   // indent | line | number
+    levelIndicator = 'indent',   // indent | line | number
+    structure = 'hierarchical'   // hierarchical | flat
   } = options;
 
-  // Choose CSS class based on indicator type
-  const ulClass = levelIndicator === 'line'
-    ? (level > 0 ? 'level-line' : 'level-root')
-    : (levelIndicator === 'number' ? 'level-numbered' : 'level-indent');
+  const isFlat = structure === 'flat';
+  let xhtml = '';
 
-  let xhtml = `<ul class="${ulClass} depth-${level}">`;
+  if (!isFlat) {
+    // Choose CSS class based on indicator type
+    const ulClass = levelIndicator === 'line'
+      ? (level > 0 ? 'level-line' : 'level-root')
+      : (levelIndicator === 'number' ? 'level-numbered' : 'level-indent');
 
-  for (const node of trees) {
-    xhtml += `<li>${escapeHTML(node.content)}`;
-
-    if (node.children && node.children.length > 0) {
-      xhtml += treeToXhtml(node.children, options, level + 1);
-    }
-
-    xhtml += '</li>';
+    xhtml += `<ul class="${ulClass} depth-${level}">`;
   }
 
-  xhtml += '</ul>';
+  for (const node of trees) {
+    const isHeading = node.heading && node.heading > 0;
+
+    if (isFlat) {
+      if (isHeading) {
+        xhtml += `<h${node.heading}>${roamMarkupToHtml(node.content)}</h${node.heading}>\n`;
+      } else {
+        xhtml += `<p>${roamMarkupToHtml(node.content)}</p>\n`;
+      }
+    } else {
+      if (isHeading) {
+        xhtml += `<li><h${node.heading}>${roamMarkupToHtml(node.content)}</h${node.heading}>`;
+      } else {
+        xhtml += `<li>${roamMarkupToHtml(node.content)}`;
+      }
+    }
+
+    if (node.children && node.children.length > 0) {
+      xhtml += treeToXhtml(node.children, options, isFlat ? 0 : level + 1);
+    }
+
+    if (!isFlat) {
+      xhtml += '</li>';
+    }
+  }
+
+  if (!isFlat) {
+    xhtml += '</ul>';
+  }
   return xhtml;
 };
 
@@ -1050,9 +1110,24 @@ nav ol {
 nav li {
   margin: 0.3em 0;
 }
-/* Block spacing */
+/* Block spacing (list items) */
 li {
   margin-bottom: ${blockMargins[blockSpacing]};
+}
+/* Flat structure paragraphs */
+p {
+  margin-top: 0;
+  margin-bottom: ${blockMargins[blockSpacing]};
+}
+/* Flat structure headings */
+h1, h2, h3, h4, h5, h6 {
+  margin-top: 1.2em;
+  margin-bottom: 0.5em;
+  line-height: 1.3;
+}
+/* Skip top margin for first heading */
+body > h1:first-child, body > h2:first-child, body > h3:first-child {
+  margin-top: 0;
 }
 /* Root-level lists */
 ul.depth-0 {
@@ -1082,6 +1157,29 @@ ul.level-root {
 /* Indicator: numbered */
 ul.level-numbered {
   list-style-type: decimal;
+}
+/* Roam Markdown Styles */
+mark {
+  background-color: #fef08a;
+  color: #1f2937;
+  padding: 0 0.2em;
+  border-radius: 0.2em;
+}
+code {
+  font-family: Consolas, Monaco, 'Courier New', monospace;
+  background-color: #f3f4f6;
+  padding: 0.1em 0.3em;
+  border-radius: 0.2em;
+  font-size: 0.9em;
+}
+.roam-page {
+  color: #2563eb;
+  text-decoration: none;
+}
+.roam-tag {
+  color: #6b7280;
+  font-style: italic;
+  font-size: 0.95em;
 }`;
 };
 
@@ -1510,6 +1608,13 @@ const promptUnifiedExport = (pageName, pageUid) => {
         <div id="epub-options-panel" style="display: none; margin-top: 12px; padding: 12px; background: white; border: 1px solid #e0e0e0; border-radius: 4px;">
           <div style="display: flex; flex-wrap: wrap; gap: 20px;">
             <div>
+              <span style="font-size: 12px; color: #666; display: block; margin-bottom: 6px;">Estructura:</span>
+              <div id="epub-structure-selector" style="display: flex; border-radius: 4px; overflow: hidden;">
+                <button data-structure="hierarchical" class="active" style="padding: 4px 10px; font-size: 12px; border: 1px solid #137CBD; background: #137CBD; color: white; cursor: pointer; border-radius: 4px 0 0 4px;">Jerárquico (Viñetas)</button>
+                <button data-structure="flat" style="padding: 4px 10px; font-size: 12px; border: 1px solid #ccc; border-left: none; background: white; color: #666; cursor: pointer; border-radius: 0 4px 4px 0;">Plano (Párrafos)</button>
+              </div>
+            </div>
+            <div>
               <span style="font-size: 12px; color: #666; display: block; margin-bottom: 6px;">Espaciado bloques:</span>
               <div id="block-spacing-selector" style="display: flex; border-radius: 4px; overflow: hidden;">
                 <button data-spacing="compact" style="padding: 4px 10px; font-size: 12px; border: 1px solid #ccc; background: white; color: #666; cursor: pointer; border-radius: 4px 0 0 4px;">Compacto</button>
@@ -1591,10 +1696,12 @@ const promptUnifiedExport = (pageName, pageUid) => {
     const levelSpacingSelector = document.getElementById('level-spacing-selector');
     const levelIndicatorSelector = document.getElementById('level-indicator-selector');
     const mdStructureSelector = document.getElementById('md-structure-selector');
+    const epubStructureSelector = document.getElementById('epub-structure-selector');
 
     let activeTab = 'filters';
     let selectedFormat = 'md'; // 'md' or 'epub'
     let epubOptions = {
+      structure: 'hierarchical',
       blockSpacing: 'normal',
       levelSpacing: 'subtle',
       levelIndicator: 'indent'
@@ -1936,6 +2043,7 @@ const promptUnifiedExport = (pageName, pageUid) => {
     setupOptionSelector(blockSpacingSelector, epubOptions, 'blockSpacing');
     setupOptionSelector(levelSpacingSelector, epubOptions, 'levelSpacing');
     setupOptionSelector(levelIndicatorSelector, epubOptions, 'levelIndicator');
+    setupOptionSelector(epubStructureSelector, epubOptions, 'structure');
     setupOptionSelector(mdStructureSelector, mdOptions, 'structure');
 
     const cleanup = () => {
@@ -3006,7 +3114,7 @@ const fetchBlocksForExport = (selectedUids, filterTag = null) => {
         [:find (pull ?block [:block/uid :block/string :block/order
                              {:block/parents [:block/uid :block/string :block/order]}])
          :where
-         [?block :block/uid "${uid}"]]
+         [?block :block/uid "${escapeDatalogString(uid)}"]]
       `);
 
       if (result && result.length > 0 && result[0][0]) {
@@ -3017,8 +3125,8 @@ const fetchBlocksForExport = (selectedUids, filterTag = null) => {
           const hasTag = window.roamAlphaAPI.data.q(`
             [:find ?match .
              :where
-             [?tag :node/title "${filterTag}"]
-             [?root :block/uid "${uid}"]
+             [?tag :node/title "${escapeDatalogString(filterTag)}"]
+             [?root :block/uid "${escapeDatalogString(uid)}"]
              (or
                [?root :block/refs ?tag]
                (and
@@ -3657,7 +3765,7 @@ const initExtension = () => {
     });
   }
 
-  console.log("Roam Filter Export extension loaded (v2.14.2)");
+  console.log("Roam Filter Export extension loaded (v2.20.2)");
 };
 
 const cleanupExtension = () => {
