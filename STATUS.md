@@ -1,12 +1,12 @@
 # Project Status - Roam Export Filter
 
-> **Última actualización**: 2026-03-05 01:40
+> **Última actualización**: 2026-03-29 20:40
 
 ---
 
 ## Versión actual
 
-**2.20.2** (2026-03-05 01:40)
+**2.21.1** (2026-03-29 20:40)
 
 ---
 
@@ -37,6 +37,9 @@
 ---
 
 ## Historial reciente
+
+### v2.21.1 (2026-03-29 20:40)
+- Fixed: Corregido problema de scroll en la pestaña "Por Ramas". Se implementó `min-height: 0` y se ajustó el manejo de `overflow` para asegurar que el footer y las opciones de formato permanezcan visibles y fijos mientras la lista de ramas mantiene su propio scroll.
 
 ### v2.20.2 (2026-03-05 01:40)
 - Added: Soporte para formato Markdown de Roam en exportación EPUB (**negritas**, __cursivas__, ^^resaltado^^, links, etc).

@@ -1,6 +1,6 @@
 // Roam Filter Export - Smart Export for Filtered Blocks
-// Version: 2.21.0
-// Date: 2026-03-05 01:10
+// Version: 2.21.1
+// Date: 2026-03-29 20:30
 //
 // Created by Camilo Luvino
 // https://github.com/camiloluvino/roamExportFilter
@@ -1440,7 +1440,7 @@ const promptUnifiedExport = (pageName, pageUid) => {
       </div>
       
       <!-- Tab content container -->
-      <div style="padding: 20px; flex: 1; overflow-y: auto;">
+      <div style="padding: 20px; flex: 1; min-height: 0; overflow-y: auto;">
         
         <!-- Por Filtros content -->
         <div id="content-filters" style="display: block;">
