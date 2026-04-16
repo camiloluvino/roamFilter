@@ -1,6 +1,6 @@
 // Roam Filter Export - Smart Export for Filtered Blocks
-// Version: 2.23.0
-// Date: 2026-04-16 00:15
+// Version: 2.23.2
+// Date: 2026-04-16 01:10
 //
 // Created by Camilo Luvino
 // https://github.com/camiloluvino/roamExportFilter
@@ -1415,7 +1415,7 @@ const promptUnifiedExport = (pageName, pageUid) => {
 
     modal.innerHTML = `
       <!-- Header with tabs and group labels -->
-      <div style="background: #f5f5f5; border-bottom: 1px solid #e0e0e0;">
+      <div style="background: #f5f5f5; border-bottom: 1px solid #e0e0e0; flex-shrink: 0;">
         <div style="display: flex; align-items: flex-end;">
           <!-- "Esta página" group -->
           <div style="flex: 0 0 auto;">
@@ -1592,7 +1592,7 @@ const promptUnifiedExport = (pageName, pageUid) => {
       </div>
       
       <!-- Format Options (above footer) -->
-      <div id="format-options-container" style="padding: 12px 20px; border-top: 1px solid #e0e0e0; background: #f9f9f9;">
+      <div id="format-options-container" style="padding: 12px 20px; border-top: 1px solid #e0e0e0; background: #f9f9f9; flex-shrink: 0;">
         <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
           <div style="display: flex; align-items: center; gap: 8px;">
             <span style="font-size: 13px; color: #666;">Formato:</span>
@@ -1655,7 +1655,7 @@ const promptUnifiedExport = (pageName, pageUid) => {
       </div>
       
       <!-- Footer -->
-      <div style="padding: 16px 20px; border-top: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; background: #fafafa;">
+      <div style="padding: 16px 20px; border-top: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; background: #fafafa; flex-shrink: 0;">
         <span id="selection-info" style="font-size: 13px; color: #666;"></span>
         <div style="display: flex; gap: 8px;">
           <button id="unified-cancel" 

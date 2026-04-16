@@ -1,12 +1,12 @@
 # Project Status - Roam Export Filter
 
-> **Última actualización**: 2026-04-16 00:15
+> **Última actualización**: 2026-04-16 01:10
 
 ---
 
 ## Versión actual
 
-**2.22.0** (2026-04-16 00:15)
+**2.23.2** (2026-04-16 01:10)
 
 ---
 
@@ -39,7 +39,14 @@
 
 ## Historial reciente
 
-### v2.22.0 (2026-04-16 00:15)
+### v2.23.2 (2026-04-16 01:10)
+- Fixed: **UI Fix definitiva**. Uso de `flex-shrink: 0` y ajuste de `overflow` para asegurar que el contenido sea desplazable sin ocultar nunca el footer (botones) ni el header.
+- Fixed: Restauración de lógica de nomenclatura que fue accidentalmente afectada durante las reparaciones de UI.
+
+### v2.23.1 (2026-04-16 00:46)
+- Fixed: **Scroll del Modal**. Se implementó un scroll general como solución rápida para visibilidad de elementos en pantallas pequeñas.
+
+### v2.23.0 (2026-04-16 00:15)
 - Added: **Nomenclatura personalizada** en exportación por ramas. Ahora se puede elegir si nombrar los archivos por el contenido del bloque, el nombre de la página, o una combinación de ambos.
 - Added: **Vista previa dinámica** del nombre de archivo en el modal de exportación.
 - Added: **Prevención de colisiones**: Si se generan nombres duplicados, el sistema añade automáticamente un sufijo numerado (`_2`, `_3`) para evitar sobreescrituras.

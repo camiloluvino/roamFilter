@@ -1,6 +1,21 @@
 # Changelog
 
-## [2.22.0] - 2026-04-16 00:15
+## [2.23.2] - 2026-04-16 01:10
+
+### Fixed
+- **Optimización de Interfaz (Flexbox)**: Se implementó `flex-shrink: 0;` en los elementos críticos del modal (header, footer y opciones de formato) para evitar que se colapsen o queden inaccesibles cuando la lista de ramas es muy extensa.
+- **Scroll Interno Inteligente**: Se restauró la estructura de desbordamiento para que solo el área de contenido (pestañas) genere barras de desplazamiento, manteniendo los controles de acción siempre visibles en la parte inferior.
+
+---
+
+## [2.23.1] - 2026-04-16 00:46
+
+### Fixed
+- **Scroll del Modal Principal**: Se agregó un manejo inicial de scroll al contenedor del modal para asegurar accesibilidad en pantallas pequeñas. Una iteración posterior (v2.23.2) refinó este comportamiento.
+
+---
+
+## [2.23.0] - 2026-04-16 00:15
 
 ### Added
 - **Nomenclatura personalizada de archivos**: Nueva sección en la pestaña "Por Ramas" para elegir cómo nombrar los archivos individuales (Bloque, Página + Bloque, o Página).
