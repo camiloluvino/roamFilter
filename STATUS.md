@@ -1,12 +1,12 @@
 # Project Status - Roam Export Filter
 
-> **Última actualización**: 2026-03-29 20:40
+> **Última actualización**: 2026-04-16 00:15
 
 ---
 
 ## Versión actual
 
-**2.21.1** (2026-03-29 20:40)
+**2.22.0** (2026-04-16 00:15)
 
 ---
 
@@ -20,6 +20,7 @@
 | **Smart Copy (Alt+Shift+C)** | ✅ Estable | Copia bloques visualmente seleccionados |
 | **Export by Root Blocks** | ✅ Estable | Exporta cada bloque raíz como archivo separado |
 | **ZIP Export (>5 files)** | ✅ Estable | Bundling automático con JSZip |
+| **Custom Naming** | ✅ Estable | Opciones de nomenclatura y prevención de duplicados |
 
 ---
 
@@ -37,6 +38,11 @@
 ---
 
 ## Historial reciente
+
+### v2.22.0 (2026-04-16 00:15)
+- Added: **Nomenclatura personalizada** en exportación por ramas. Ahora se puede elegir si nombrar los archivos por el contenido del bloque, el nombre de la página, o una combinación de ambos.
+- Added: **Vista previa dinámica** del nombre de archivo en el modal de exportación.
+- Added: **Prevención de colisiones**: Si se generan nombres duplicados, el sistema añade automáticamente un sufijo numerado (`_2`, `_3`) para evitar sobreescrituras.
 
 ### v2.21.1 (2026-03-29 20:40)
 - Fixed: Corregido problema de scroll en la pestaña "Por Ramas". Se implementó `min-height: 0` y se ajustó el manejo de `overflow` para asegurar que el footer y las opciones de formato permanezcan visibles y fijos mientras la lista de ramas mantiene su propio scroll.

@@ -1,6 +1,6 @@
 // Roam Filter Export - Smart Export for Filtered Blocks
-// Version: 2.21.1
-// Date: 2026-03-29 20:30
+// Version: 2.23.0
+// Date: 2026-04-16 00:15
 //
 // Created by Camilo Luvino
 // https://github.com/camiloluvino/roamExportFilter
@@ -1498,6 +1498,18 @@ const promptUnifiedExport = (pageName, pageUid) => {
             ${renderTree(structure)}
           </div>
           <div style="margin-top: 12px; padding: 12px; background: #f5f5f5; border-radius: 4px;">
+            <div style="margin-bottom: 12px;">
+              <span style="font-size: 13px; color: #666; display: block; margin-bottom: 6px;">Nomenclatura de archivos:</span>
+              <div id="branch-naming-selector" style="display: flex; border-radius: 4px; overflow: hidden; width: fit-content;">
+                <button data-naming="block" class="active" style="padding: 4px 10px; font-size: 12px; border: 1px solid #137CBD; background: #137CBD; color: white; cursor: pointer; border-radius: 4px 0 0 4px;">Bloque</button>
+                <button data-naming="page_block" style="padding: 4px 10px; font-size: 12px; border: 1px solid #ccc; border-left: none; background: white; color: #666; cursor: pointer;">Página + Bloque</button>
+                <button data-naming="page" style="padding: 4px 10px; font-size: 12px; border: 1px solid #ccc; border-left: none; background: white; color: #666; cursor: pointer; border-radius: 0 4px 4px 0;">Página</button>
+              </div>
+              <div id="branch-naming-preview" style="font-size: 11px; color: #888; margin-top: 6px; font-family: monospace;">Ej: nombre_del_bloque.md</div>
+            </div>
+            
+            <div style="height: 1px; background: #e0e0e0; margin: 12px 0;"></div>
+
             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; margin-bottom: 8px;">
               <input type="checkbox" id="order-prefix-enabled">
               <span>Agregar prefijo de orden (01_, 02_, ...)</span>
@@ -1671,6 +1683,8 @@ const promptUnifiedExport = (pageName, pageUid) => {
     const tagInput = document.getElementById('unified-tag-input');
     const branchFilterEnabled = document.getElementById('branch-filter-enabled');
     const branchFilterTag = document.getElementById('branch-filter-tag');
+    const branchNamingSelector = document.getElementById('branch-naming-selector');
+    const branchNamingPreview = document.getElementById('branch-naming-preview');
     const orderPrefixEnabled = document.getElementById('order-prefix-enabled');
     const orderDescending = document.getElementById('order-descending');
     const orderDescendingLabel = document.getElementById('order-descending-label');
@@ -1834,6 +1848,54 @@ const promptUnifiedExport = (pageName, pageUid) => {
       });
     });
 
+    // Branch Naming logic
+    let branchNamingStrategy = 'block'; // default
+    const updateNamingPreview = () => {
+      if (!branchNamingPreview) return;
+      let prefix = orderPrefixEnabled.checked ? (orderDescending.checked ? '02_' : '01_') : '';
+      let safePage = generatePageFilename(pageName);
+      let previewText = '';
+      if (branchNamingStrategy === 'block') {
+        previewText = prefix + 'mi_bloque.md';
+      } else if (branchNamingStrategy === 'page_block') {
+        previewText = prefix + safePage + '_mi_bloque.md';
+      } else if (branchNamingStrategy === 'page') {
+        previewText = prefix + safePage + '.md';
+      }
+      branchNamingPreview.textContent = 'Ej: ' + previewText;
+    };
+
+    if (branchNamingSelector) {
+      branchNamingSelector.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', () => {
+          branchNamingStrategy = btn.dataset.naming;
+          
+          // Update active styles
+          const buttons = branchNamingSelector.querySelectorAll('button');
+          buttons.forEach((b, idx) => {
+            const isActive = b.dataset.naming === branchNamingStrategy;
+            const isFirst = idx === 0;
+            const isLast = idx === buttons.length - 1;
+            b.style.cssText = `
+              padding: 4px 10px;
+              font-size: 12px;
+              border: 1px solid ${isActive ? '#137CBD' : '#ccc'};
+              ${!isFirst ? 'border-left: none;' : ''}
+              background: ${isActive ? '#137CBD' : 'white'};
+              color: ${isActive ? 'white' : '#666'};
+              cursor: pointer;
+              ${isFirst ? 'border-radius: 4px 0 0 4px;' : ''}
+              ${isLast ? 'border-radius: 0 4px 4px 0;' : ''}
+            `;
+          });
+          updateNamingPreview();
+        });
+      });
+    }
+
+    // Initialize preview
+    updateNamingPreview();
+
     // Order prefix toggle - enables/disables descending option
     orderPrefixEnabled.addEventListener('change', () => {
       orderDescending.disabled = !orderPrefixEnabled.checked;
@@ -1841,7 +1903,10 @@ const promptUnifiedExport = (pageName, pageUid) => {
       if (!orderPrefixEnabled.checked) {
         orderDescending.checked = false;
       }
+      updateNamingPreview();
     });
+
+    orderDescending.addEventListener('change', updateNamingPreview);
 
     // Branch filter toggle
     branchFilterEnabled.addEventListener('change', () => {
@@ -2132,6 +2197,7 @@ const promptUnifiedExport = (pageName, pageUid) => {
           filterTag: validatedFilterTag,
           useOrderPrefix: orderPrefixEnabled.checked,
           useDescendingOrder: orderDescending.checked,
+          branchNamingStrategy,
           format: selectedFormat,
           epubOptions: { ...epubOptions },
           mdOptions: { ...mdOptions }
@@ -2276,7 +2342,7 @@ const unifiedExport = async () => {
 
     } else if (result.mode === 'branches') {
       // Export by branch selection
-      const { selectedUids, filterTag, useOrderPrefix, useDescendingOrder, format, epubOptions, mdOptions } = result;
+      const { selectedUids, filterTag, useOrderPrefix, useDescendingOrder, format, epubOptions, mdOptions, branchNamingStrategy = 'block' } = result;
 
       showNotification(`📄 Procesando ${selectedUids.length} ramas...`, '#137CBD');
 
@@ -2341,7 +2407,28 @@ const unifiedExport = async () => {
           const rootContent = branchTree.content || 'untitled';
           const prefixNumber = useDescendingOrder ? (totalForPrefix - idx) : (idx + 1);
           const prefix = useOrderPrefix ? String(prefixNumber).padStart(2, '0') + '_' : '';
-          const filename = prefix + generateRootFilename(rootContent);
+          
+          let baseName = '';
+          const safePage = generatePageFilename(pageName);
+          const blockName = generateRootFilename(rootContent);
+          const blockNameWithoutExt = blockName.substring(0, blockName.length - 3); // Remove .md
+          
+          if (branchNamingStrategy === 'block') {
+            baseName = blockNameWithoutExt;
+          } else if (branchNamingStrategy === 'page_block') {
+            baseName = safePage + '_' + blockNameWithoutExt;
+          } else if (branchNamingStrategy === 'page') {
+            baseName = safePage;
+          }
+          
+          let filename = prefix + baseName + '.md';
+          
+          // Collision prevention: If filename already exists, append _2, _3...
+          let counter = 2;
+          while (files.some(f => f.filename === filename)) {
+            filename = prefix + baseName + `_${counter}.md`;
+            counter++;
+          }
 
           const markdown = treeToMarkdown([branchTree], 0, mdOptions);
           const header = `# ${rootContent}\n> Generated: ${new Date().toLocaleString()}${filterTag ? `\n> Filter: #${filterTag}` : ''}\n\n---\n\n`;

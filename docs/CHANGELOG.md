@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.22.0] - 2026-04-16 00:15
+
+### Added
+- **Nomenclatura personalizada de archivos**: Nueva sección en la pestaña "Por Ramas" para elegir cómo nombrar los archivos individuales (Bloque, Página + Bloque, o Página).
+- **Vista previa en tiempo real**: Los usuarios pueden ver exactamente cómo quedará el nombre del archivo (incluyendo prefijos de orden) antes de exportar.
+- **Prevención de duplicados**: Lógica de resolución de nombres que añade sufijos numéricos si detecta conflictos en el paquete de exportación.
+
+---
+
+## [2.21.1] - 2026-03-29 20:40
+
+### Fixed
+- **Scroll en pestaña "Por Ramas"**: Corregido problema donde el modal crecía indefinidamente o el footer se ocultaba. Se implementó un contenedor con scroll interno independiente para la lista de ramas.
+
+---
+
 ## [2.20.1] - 2026-03-04 14:55
 
 ### Fixed
